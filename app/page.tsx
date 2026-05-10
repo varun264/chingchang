@@ -42,7 +42,7 @@ const tabs = [
 
 export default function HomePage() {
   const [form, setForm] = useState({
-    name: "Athlete",
+    name: "Varun",
     age: 20,
     heightCm: 172,
     weightKg: 68,
@@ -147,17 +147,17 @@ export default function HomePage() {
         <div className="heroTop">
           <div>
             <p className="kicker">Performance Planner</p>
-            <h1>Weekly Workout + Diet Planner</h1>
-            <p>Built for TT, badminton, cricket, football, agility, and strength with daily nutrition tied to training load.</p>
+            <h1>Train like an all-round athlete</h1>
+            <p>Sport-specific drills, strength work, and diet plans for TT, badminton, cricket, football, agility, and gym training.</p>
           </div>
-          <div className="heroBadge">{form.level.toUpperCase()} / {form.sessionMinutes} MIN</div>
+          <div className="heroBadge">ADMIN: {form.name.toUpperCase()}</div>
         </div>
 
         <div className="dashboardControls">
           <details className="dropdownPanel">
             <summary>Profile</summary>
             <div className="dropdownBody">
-              <p>{form.name}</p>
+              <p><strong>{form.name}</strong> - admin profile</p>
               <p>{form.age} yrs, {form.heightCm} cm, {form.weightKg} kg</p>
               <p>{form.trainingDaysPerWeek} training days/week</p>
               <p>{form.level} level, {form.sessionMinutes} min sessions</p>
