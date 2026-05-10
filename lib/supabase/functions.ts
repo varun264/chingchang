@@ -6,11 +6,12 @@ export async function generatePlanViaEdge(payload: {
   trainingDaysPerWeek: number;
   level: "beginner" | "intermediate" | "advanced";
   sessionMinutes: 30 | 45 | 60 | 90;
-}) {
+}, token: string) {
   const response = await fetch("/api/plan", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
     },
     body: JSON.stringify(payload)
   });
@@ -23,8 +24,12 @@ export async function generatePlanViaEdge(payload: {
   return response.json();
 }
 
-export async function getLatestPlanViaEdge(profileId: string) {
-  const response = await fetch(`/api/plan?profileId=${encodeURIComponent(profileId)}`);
+export async function getLatestPlanViaEdge(token: string) {
+  const response = await fetch("/api/plan", {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
 
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));

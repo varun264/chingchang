@@ -1,39 +1,48 @@
 import { generateWeeklyPlan } from "@/lib/planner/generator";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
-export async function GET(request: Request) {
+async function getAuthenticatedUser(request: Request) {
   const supabaseAdmin = getSupabaseAdmin();
   if (!supabaseAdmin) {
-    return Response.json(
-      { error: "Missing Supabase admin environment variables on server." },
-      { status: 500 }
-    );
+    return { error: "Missing Supabase admin environment variables on server.", status: 500 as const };
   }
 
-  const { searchParams } = new URL(request.url);
-  const profileId = searchParams.get("profileId");
-  if (!profileId) {
-    return Response.json({ error: "Missing profileId query param." }, { status: 400 });
+  const token = request.headers.get("authorization")?.replace("Bearer ", "");
+  if (!token) {
+    return { error: "Sign in required.", status: 401 as const };
   }
 
+  const { data, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !data.user) {
+    return { error: "Invalid or expired session.", status: 401 as const };
+  }
+
+  return { supabaseAdmin, user: data.user };
+}
+
+async function loadAccountPlan(supabaseAdmin: NonNullable<ReturnType<typeof getSupabaseAdmin>>, userId: string) {
   const { data: profile, error: profileError } = await supabaseAdmin
     .from("profiles")
-    .select("id, name, age, height_cm, weight_kg, training_days_per_week, created_at")
-    .eq("id", profileId)
-    .single();
+    .select("id, user_id, name, age, height_cm, weight_kg, training_days_per_week, created_at")
+    .eq("user_id", userId)
+    .maybeSingle();
 
   if (profileError) {
-    return Response.json({ error: profileError.message }, { status: 404 });
+    return { error: profileError.message, status: 500 as const };
+  }
+
+  if (!profile) {
+    return { profile: null, sessions: [] };
   }
 
   const { data: sessions, error: sessionError } = await supabaseAdmin
     .from("workout_sessions")
     .select("id, session_date, sport, focus, warmup, main_set, cooldown, created_at")
-    .eq("profile_id", profileId)
+    .eq("profile_id", profile.id)
     .order("created_at", { ascending: true });
 
   if (sessionError) {
-    return Response.json({ error: sessionError.message }, { status: 500 });
+    return { error: sessionError.message, status: 500 as const };
   }
 
   const sessionIds = (sessions ?? []).map((session) => session.id);
@@ -43,7 +52,7 @@ export async function GET(request: Request) {
     .in("workout_session_id", sessionIds.length ? sessionIds : ["00000000-0000-0000-0000-000000000000"]);
 
   if (dietError) {
-    return Response.json({ error: dietError.message }, { status: 500 });
+    return { error: dietError.message, status: 500 as const };
   }
 
   const dietBySession = new Map((dietRows ?? []).map((row) => [row.workout_session_id, row]));
@@ -52,34 +61,62 @@ export async function GET(request: Request) {
     diet: dietBySession.get(session.id) ?? null
   }));
 
-  return Response.json({ profile, sessions: combined });
+  return { profile, sessions: combined };
+}
+
+export async function GET(request: Request) {
+  const auth = await getAuthenticatedUser(request);
+  if ("error" in auth) {
+    return Response.json({ error: auth.error }, { status: auth.status });
+  }
+
+  const result = await loadAccountPlan(auth.supabaseAdmin, auth.user.id);
+  if ("error" in result) {
+    return Response.json({ error: result.error }, { status: result.status });
+  }
+
+  return Response.json(result);
 }
 
 export async function POST(request: Request) {
-  const supabaseAdmin = getSupabaseAdmin();
-  if (!supabaseAdmin) {
-    return Response.json(
-      { error: "Missing Supabase admin environment variables on server." },
-      { status: 500 }
-    );
+  const auth = await getAuthenticatedUser(request);
+  if ("error" in auth) {
+    return Response.json({ error: auth.error }, { status: auth.status });
   }
 
   const body = await request.json();
-
   const profile = {
-    name: body.name ?? "Athlete",
+    name: body.name ?? auth.user.email?.split("@")[0] ?? "Athlete",
     age: Number(body.age ?? 20),
     heightCm: Number(body.heightCm ?? 170),
     weightKg: Number(body.weightKg ?? 70),
-    trainingDaysPerWeek: Number(body.trainingDaysPerWeek ?? 7)
+    trainingDaysPerWeek: Number(body.trainingDaysPerWeek ?? 7),
+    level: body.level ?? "intermediate",
+    sessionMinutes: body.sessionMinutes ?? 60
   };
 
+  const existing = await loadAccountPlan(auth.supabaseAdmin, auth.user.id);
+  if ("error" in existing) {
+    return Response.json({ error: existing.error }, { status: existing.status });
+  }
+
+  if (existing.profile) {
+    const { error: deleteError } = await auth.supabaseAdmin
+      .from("workout_sessions")
+      .delete()
+      .eq("profile_id", existing.profile.id);
+
+    if (deleteError) {
+      return Response.json({ error: deleteError.message }, { status: 500 });
+    }
+  }
+
+  const profileId = existing.profile?.id ?? crypto.randomUUID();
   const plan = generateWeeklyPlan(profile);
 
-  const profileId = crypto.randomUUID();
-
-  const { error: profileError } = await supabaseAdmin.from("profiles").insert({
+  const { error: profileError } = await auth.supabaseAdmin.from("profiles").upsert({
     id: profileId,
+    user_id: auth.user.id,
     name: profile.name,
     age: profile.age,
     height_cm: profile.heightCm,
@@ -94,7 +131,7 @@ export async function POST(request: Request) {
   for (const day of plan) {
     const sessionId = crypto.randomUUID();
 
-    const { error: sessionError } = await supabaseAdmin.from("workout_sessions").insert({
+    const { error: sessionError } = await auth.supabaseAdmin.from("workout_sessions").insert({
       id: sessionId,
       profile_id: profileId,
       session_date: new Date().toISOString().split("T")[0],
@@ -109,7 +146,7 @@ export async function POST(request: Request) {
       return Response.json({ error: sessionError.message }, { status: 500 });
     }
 
-    const { error: dietError } = await supabaseAdmin.from("diet_plans").insert({
+    const { error: dietError } = await auth.supabaseAdmin.from("diet_plans").insert({
       id: crypto.randomUUID(),
       workout_session_id: sessionId,
       calories: day.macros.calories,

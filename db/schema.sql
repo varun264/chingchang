@@ -1,5 +1,6 @@
 create table if not exists profiles (
   id uuid primary key,
+  user_id uuid unique,
   name text not null,
   age int not null check (age > 0),
   height_cm int not null check (height_cm > 0),
@@ -7,6 +8,9 @@ create table if not exists profiles (
   training_days_per_week int not null check (training_days_per_week between 1 and 7),
   created_at timestamptz not null default now()
 );
+
+alter table profiles add column if not exists user_id uuid;
+create unique index if not exists profiles_user_id_key on profiles(user_id) where user_id is not null;
 
 create table if not exists workout_sessions (
   id uuid primary key,

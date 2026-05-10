@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { generatePlanViaEdge, getLatestPlanViaEdge } from "@/lib/supabase/functions";
+import { supabaseClient } from "@/lib/supabase/client";
 
 type PlanDay = {
   day: string;
@@ -41,6 +42,9 @@ const tabs = [
 ] as const;
 
 export default function HomePage() {
+  const [authForm, setAuthForm] = useState({ email: "", password: "" });
+  const [sessionToken, setSessionToken] = useState("");
+  const [accountEmail, setAccountEmail] = useState("");
   const [form, setForm] = useState({
     name: "Varun",
     age: 20,
@@ -59,6 +63,73 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]["value"]>("skill");
 
   const visiblePlan = selectedSport === "all" ? plan : plan.filter((day) => day.sport === selectedSport);
+
+  async function loadAccountPlan(token: string) {
+    const result = await getLatestPlanViaEdge(token);
+    const fromSessions = (result.sessions ?? []).map((s: any): PlanDay => ({
+      day: s.session_date,
+      sport: s.sport,
+      focus: s.focus,
+      sportDrills: [],
+      strengthBlock: [],
+      warmup: s.warmup,
+      mainSet: s.main_set,
+      cooldown: s.cooldown,
+      macros: {
+        calories: s.diet?.calories ?? 0,
+        proteinG: s.diet?.protein_g ?? 0,
+        carbsG: s.diet?.carbs_g ?? 0,
+        fatsG: s.diet?.fats_g ?? 0
+      },
+      meals: {
+        breakfast: s.diet?.breakfast ?? "",
+        preWorkoutSnack: s.diet?.pre_workout_snack ?? "",
+        postWorkoutMeal: s.diet?.post_workout_meal ?? "",
+        lunch: s.diet?.lunch ?? "",
+        eveningSnack: s.diet?.evening_snack ?? "",
+        dinner: s.diet?.dinner ?? "",
+        hydrationLiters: s.diet?.hydration_liters ?? 0
+      }
+    }));
+    setPlan(fromSessions);
+    setProfileId(result.profile?.id ?? "");
+  }
+
+  async function handleAuth(mode: "signin" | "signup") {
+    setLoading(true);
+    setError("");
+    try {
+      const { data, error: authError } = mode === "signin"
+        ? await supabaseClient.auth.signInWithPassword({ email: authForm.email, password: authForm.password })
+        : await supabaseClient.auth.signUp({ email: authForm.email, password: authForm.password });
+
+      if (authError) {
+        throw authError;
+      }
+
+      const token = data.session?.access_token;
+      if (!token) {
+        setError("Check your email to confirm the account, then sign in.");
+        return;
+      }
+
+      setSessionToken(token);
+      setAccountEmail(data.user?.email ?? authForm.email);
+      await loadAccountPlan(token);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Authentication failed.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSignOut() {
+    await supabaseClient.auth.signOut();
+    setSessionToken("");
+    setAccountEmail("");
+    setPlan([]);
+    setProfileId("");
+  }
 
   function addCustomItem(index: number, kind: "drill" | "strength" | "diet") {
     const key = String(index);
@@ -86,10 +157,15 @@ export default function HomePage() {
   }
 
   async function handleGenerate() {
+    if (!sessionToken) {
+      setError("Sign in before creating or updating your plan.");
+      return;
+    }
+
     setLoading(true);
     setError("");
     try {
-      const result = await generatePlanViaEdge(form);
+      const result = await generatePlanViaEdge(form, sessionToken);
       setPlan(result.plan ?? []);
       setProfileId(result.profileId ?? "");
     } catch (e) {
@@ -100,40 +176,14 @@ export default function HomePage() {
   }
 
   async function handleFetchLatest() {
-    if (!profileId) {
-      setError("Enter or generate a profileId first.");
+    if (!sessionToken) {
+      setError("Sign in to load your account plan.");
       return;
     }
     setLoading(true);
     setError("");
     try {
-      const result = await getLatestPlanViaEdge(profileId);
-      const fromSessions = (result.sessions ?? []).map((s: any): PlanDay => ({
-        day: s.session_date,
-        sport: s.sport,
-        focus: s.focus,
-        sportDrills: [],
-        strengthBlock: [],
-        warmup: s.warmup,
-        mainSet: s.main_set,
-        cooldown: s.cooldown,
-        macros: {
-          calories: s.diet?.calories ?? 0,
-          proteinG: s.diet?.protein_g ?? 0,
-          carbsG: s.diet?.carbs_g ?? 0,
-          fatsG: s.diet?.fats_g ?? 0
-        },
-        meals: {
-          breakfast: s.diet?.breakfast ?? "",
-          preWorkoutSnack: s.diet?.pre_workout_snack ?? "",
-          postWorkoutMeal: s.diet?.post_workout_meal ?? "",
-          lunch: s.diet?.lunch ?? "",
-          eveningSnack: s.diet?.evening_snack ?? "",
-          dinner: s.diet?.dinner ?? "",
-          hydrationLiters: s.diet?.hydration_liters ?? 0
-        }
-      }));
-      setPlan(fromSessions);
+      await loadAccountPlan(sessionToken);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load latest plan.");
     } finally {
@@ -154,6 +204,26 @@ export default function HomePage() {
         </div>
 
         <div className="dashboardControls">
+          <div className="authPanel">
+            {sessionToken ? (
+              <>
+                <span>Signed in</span>
+                <strong>{accountEmail}</strong>
+                <button className="button secondaryButton" onClick={handleSignOut} type="button">Sign out</button>
+              </>
+            ) : (
+              <>
+                <span>Account</span>
+                <input className="fieldInput" placeholder="email" value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} />
+                <input className="fieldInput" placeholder="password" type="password" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} />
+                <div className="authActions">
+                  <button className="button" disabled={loading} onClick={() => handleAuth("signin")} type="button">Sign in</button>
+                  <button className="button secondaryButton" disabled={loading} onClick={() => handleAuth("signup")} type="button">Create account</button>
+                </div>
+              </>
+            )}
+          </div>
+
           <details className="dropdownPanel">
             <summary>Profile</summary>
             <div className="dropdownBody">
@@ -251,18 +321,12 @@ export default function HomePage() {
 
         <div className="actions">
           <button onClick={handleGenerate} disabled={loading} className="button">
-            {loading ? "Working..." : "Generate via Edge Function"}
+            {loading ? "Working..." : "Create / update my account plan"}
           </button>
-          <input
-            className="fieldInput"
-            style={{ minWidth: "240px", flex: 1 }}
-            value={profileId}
-            onChange={(e) => setProfileId(e.target.value)}
-            placeholder="profileId"
-          />
           <button onClick={handleFetchLatest} disabled={loading} className="button">
-            Fetch latest by profileId
+            Load my saved plan
           </button>
+          {profileId ? <span className="profileChip">Profile: {profileId}</span> : null}
         </div>
         {error ? <p className="error">{error}</p> : null}
       </section>
