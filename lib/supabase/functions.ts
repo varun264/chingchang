@@ -1,6 +1,3 @@
-const projectRef = "mttoicstadpjafzxgowq";
-const baseUrl = `https://${projectRef}.functions.supabase.co`;
-
 export async function generatePlanViaEdge(payload: {
   name: string;
   age: number;
@@ -10,13 +7,10 @@ export async function generatePlanViaEdge(payload: {
   level: "beginner" | "intermediate" | "advanced";
   sessionMinutes: 30 | 45 | 60 | 90;
 }) {
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const response = await fetch(`${baseUrl}/generate-plan`, {
+  const response = await fetch("/api/plan", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      apikey: anon ?? "",
-      Authorization: `Bearer ${anon ?? ""}`
+      "Content-Type": "application/json"
     },
     body: JSON.stringify(payload)
   });
@@ -30,14 +24,7 @@ export async function generatePlanViaEdge(payload: {
 }
 
 export async function getLatestPlanViaEdge(profileId: string) {
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const response = await fetch(`${baseUrl}/get-latest-plan?profileId=${encodeURIComponent(profileId)}`, {
-    method: "GET",
-    headers: {
-      apikey: anon ?? "",
-      Authorization: `Bearer ${anon ?? ""}`
-    }
-  });
+  const response = await fetch(`/api/plan?profileId=${encodeURIComponent(profileId)}`);
 
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
