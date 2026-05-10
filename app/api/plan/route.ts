@@ -1,7 +1,15 @@
 import { generateWeeklyPlan } from "@/lib/planner/generator";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export async function POST(request: Request) {
+  const supabaseAdmin = getSupabaseAdmin();
+  if (!supabaseAdmin) {
+    return Response.json(
+      { error: "Missing Supabase admin environment variables on server." },
+      { status: 500 }
+    );
+  }
+
   const body = await request.json();
 
   const profile = {
