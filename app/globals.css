@@ -1,0 +1,234 @@
+:root {
+  --bg: #07131f;
+  --bg-soft: #0d1d30;
+  --panel: #132844;
+  --line: #2a4566;
+  --text: #ecf3ff;
+  --muted: #b5c7e2;
+  --accent: #3ed4a5;
+  --accent-soft: #1d5f53;
+  --danger: #ff9f9f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Trebuchet MS", "Lucida Sans Unicode", "Lucida Grande", "Lucida Sans", Arial, sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 10% 8%, rgba(41, 114, 139, 0.32), transparent 28%),
+    radial-gradient(circle at 92% 16%, rgba(42, 181, 119, 0.2), transparent 24%),
+    linear-gradient(160deg, #091726 0%, var(--bg) 48%, #08101a 100%);
+  min-height: 100vh;
+}
+
+.container {
+  width: min(1140px, 100% - 1.4rem);
+  margin: clamp(0.8rem, 2.2vw, 2rem) auto 3rem;
+}
+
+.hero {
+  padding: clamp(1rem, 2.3vw, 1.4rem);
+  border: 1px solid var(--line);
+  border-radius: 1.1rem;
+  background: linear-gradient(135deg, rgba(16, 36, 62, 0.94), rgba(17, 41, 69, 0.88));
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.28);
+}
+
+.hero h1 {
+  margin: 0 0 0.5rem;
+  font-size: clamp(1.25rem, 2.8vw, 2rem);
+  letter-spacing: 0.2px;
+}
+
+.heroTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.kicker {
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  font-size: 0.72rem;
+  color: #8fddb9;
+  margin: 0 0 0.2rem;
+}
+
+.heroBadge {
+  border: 1px solid #2f896f;
+  background: linear-gradient(180deg, #1f5f51, #17463b);
+  color: #dffff4;
+  border-radius: 999px;
+  padding: 0.42rem 0.72rem;
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+.hero p {
+  margin: 0.2rem 0;
+  color: var(--muted);
+}
+
+.targets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin-top: 1rem;
+}
+
+.formGrid {
+  margin-top: 0.8rem;
+}
+
+.targetCard {
+  background: linear-gradient(180deg, rgba(26, 49, 79, 0.9), rgba(19, 39, 64, 0.95));
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  padding: 0.72rem;
+  color: var(--text);
+}
+
+.field {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.fieldLabel {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.fieldInput {
+  width: 100%;
+  border: 1px solid #37618f;
+  border-radius: 0.62rem;
+  background: #0e2239;
+  color: var(--text);
+  padding: 0.62rem 0.68rem;
+  outline: none;
+}
+
+.fieldInput:focus {
+  border-color: #49d6ab;
+  box-shadow: 0 0 0 3px rgba(74, 214, 171, 0.15);
+}
+
+.targetLabel {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.targetValue {
+  font-size: 1.1rem;
+  margin-top: 0.2rem;
+}
+
+.days {
+  margin-top: 1.25rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 0.9rem;
+}
+
+.card {
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(14, 30, 49, 0.92), rgba(12, 25, 40, 0.94));
+  border-radius: 0.85rem;
+  padding: 0.95rem;
+}
+
+.card h3 {
+  margin: 0;
+}
+
+.cardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.pill {
+  display: inline-block;
+  margin-top: 0.35rem;
+  padding: 0.32rem 0.62rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.78rem;
+  background: rgba(15, 47, 41, 0.25);
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.cardActions {
+  margin-top: 0.55rem;
+}
+
+.button {
+  border: 1px solid #2e8d72;
+  background: linear-gradient(180deg, #1f705d, #1b5f52);
+  color: #f2fff9;
+  border-radius: 0.68rem;
+  padding: 0.58rem 0.88rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.error {
+  color: var(--danger);
+  margin: 0.7rem 0 0;
+}
+
+ul {
+  margin: 0.55rem 0 0;
+  padding-left: 1rem;
+}
+
+li {
+  margin-bottom: 0.2rem;
+  color: var(--muted);
+}
+
+@media (max-width: 900px) {
+  .heroTop {
+    flex-direction: column;
+  }
+
+  .targets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .container {
+    width: min(1140px, 100% - 1rem);
+  }
+
+  .targets {
+    grid-template-columns: 1fr;
+  }
+
+  .days {
+    grid-template-columns: 1fr;
+  }
+
+  .hero p {
+    font-size: 0.95rem;
+  }
+}

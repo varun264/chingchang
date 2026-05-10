@@ -1,0 +1,5 @@
+[functions.generate-plan]
+verify_jwt = false
+
+[functions.get-latest-plan]
+verify_jwt = false
