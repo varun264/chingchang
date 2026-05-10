@@ -69,6 +69,81 @@ body {
   white-space: nowrap;
 }
 
+.dashboardControls {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.8fr) minmax(190px, 0.8fr) minmax(260px, 1.4fr);
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.dropdownPanel,
+.selectPanel,
+.tabPanel {
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  background: rgba(9, 26, 45, 0.72);
+  padding: 0.72rem;
+}
+
+.dropdownPanel summary {
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.dropdownBody {
+  margin-top: 0.55rem;
+  color: var(--muted);
+  display: grid;
+  gap: 0.25rem;
+}
+
+.dropdownBody p {
+  margin: 0;
+}
+
+.selectPanel {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.selectPanel span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.selectPanel select {
+  width: 100%;
+  border: 1px solid #37618f;
+  border-radius: 0.62rem;
+  background: #0e2239;
+  color: var(--text);
+  padding: 0.62rem 0.68rem;
+}
+
+.tabPanel {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.tab {
+  border: 1px solid rgba(62, 212, 165, 0.25);
+  background: rgba(19, 40, 68, 0.8);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 0.48rem 0.72rem;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.activeTab {
+  background: linear-gradient(180deg, #31bb94, #1e7763);
+  color: #f4fff9;
+  border-color: #50e3b6;
+}
+
 .hero p {
   margin: 0.2rem 0;
   color: var(--muted);
@@ -175,6 +250,17 @@ body {
   margin-top: 0.55rem;
 }
 
+.sectionBlock {
+  margin-top: 0.75rem;
+  border-top: 1px solid rgba(181, 199, 226, 0.14);
+  padding-top: 0.72rem;
+}
+
+.sectionBlock h4 {
+  margin: 0;
+  color: #dfffee;
+}
+
 .button {
   border: 1px solid #2e8d72;
   background: linear-gradient(180deg, #1f705d, #1b5f52);
@@ -210,6 +296,14 @@ li {
     flex-direction: column;
   }
 
+  .dashboardControls {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .tabPanel {
+    grid-column: 1 / -1;
+  }
+
   .targets {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -222,6 +316,18 @@ li {
 
   .targets {
     grid-template-columns: 1fr;
+  }
+
+  .dashboardControls {
+    grid-template-columns: 1fr;
+  }
+
+  .tabPanel {
+    grid-column: auto;
+  }
+
+  .tab {
+    flex: 1 1 100%;
   }
 
   .days {

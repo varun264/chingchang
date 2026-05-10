@@ -24,6 +24,22 @@ type PlanDay = {
   };
 };
 
+const sportOptions = [
+  { value: "all", label: "All sports" },
+  { value: "table_tennis", label: "Table Tennis" },
+  { value: "badminton", label: "Badminton" },
+  { value: "cricket", label: "Cricket" },
+  { value: "football", label: "Football" },
+  { value: "agility", label: "Agility" },
+  { value: "strength", label: "Strength" }
+];
+
+const tabs = [
+  { value: "skill", label: "Skill drills" },
+  { value: "strength", label: "Strength training" },
+  { value: "diet", label: "Diet" }
+] as const;
+
 export default function HomePage() {
   const [form, setForm] = useState({
     name: "Athlete",
@@ -39,6 +55,10 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [customInput, setCustomInput] = useState<Record<string, { drill: string; strength: string; diet: string }>>({});
+  const [selectedSport, setSelectedSport] = useState("all");
+  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]["value"]>("skill");
+
+  const visiblePlan = selectedSport === "all" ? plan : plan.filter((day) => day.sport === selectedSport);
 
   function addCustomItem(index: number, kind: "drill" | "strength" | "diet") {
     const key = String(index);
@@ -132,6 +152,41 @@ export default function HomePage() {
           </div>
           <div className="heroBadge">{form.level.toUpperCase()} / {form.sessionMinutes} MIN</div>
         </div>
+
+        <div className="dashboardControls">
+          <details className="dropdownPanel">
+            <summary>Profile</summary>
+            <div className="dropdownBody">
+              <p>{form.name}</p>
+              <p>{form.age} yrs, {form.heightCm} cm, {form.weightKg} kg</p>
+              <p>{form.trainingDaysPerWeek} training days/week</p>
+              <p>{form.level} level, {form.sessionMinutes} min sessions</p>
+            </div>
+          </details>
+
+          <label className="selectPanel">
+            <span>Sports</span>
+            <select value={selectedSport} onChange={(event) => setSelectedSport(event.target.value)}>
+              {sportOptions.map((sport) => (
+                <option key={sport.value} value={sport.value}>{sport.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <div className="tabPanel" role="tablist" aria-label="Sport sections">
+            {tabs.map((tab) => (
+              <button
+                className={activeTab === tab.value ? "tab activeTab" : "tab"}
+                key={tab.value}
+                onClick={() => setActiveTab(tab.value)}
+                type="button"
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="targets">
           <div className="targetCard">
             <div className="targetLabel">Training Days</div>
@@ -213,68 +268,78 @@ export default function HomePage() {
       </section>
 
       <section className="days">
-        {plan.map((day, index) => (
+        {visiblePlan.map((day, index) => {
+          const planIndex = plan.findIndex((item) => item.day === day.day && item.sport === day.sport && item.focus === day.focus);
+          const itemIndex = planIndex >= 0 ? planIndex : index;
+
+          return (
           <article className="card" key={`${day.day}-${day.sport}-${index}`}>
             <div className="cardHead">
               <h3>{day.day}</h3>
               <div className="pill">{day.sport.replace("_", " ")} - {day.focus}</div>
             </div>
 
-            <ul>
-              <li>
-                <strong>Sport drills:</strong> {(day.sportDrills ?? []).join(" | ") || "Generated for new plans"}
-              </li>
-              <li>
-                <strong>Strength block:</strong> {(day.strengthBlock ?? []).join(" | ") || "Generated for new plans"}
-              </li>
-              <li>
-                <strong>Warm-up:</strong> {day.warmup.join(" | ")}
-              </li>
-              <li>
-                <strong>Main set:</strong> {day.mainSet.join(" | ")}
-              </li>
-              <li>
-                <strong>Cooldown:</strong> {day.cooldown.join(" | ")}
-              </li>
-              <li>
-                <strong>Macros:</strong> {day.macros.calories} kcal, P {day.macros.proteinG}g, C {day.macros.carbsG}g, F {day.macros.fatsG}g
-              </li>
-              <li>
-                <strong>Meals:</strong> {day.meals.breakfast}; {day.meals.preWorkoutSnack}; {day.meals.postWorkoutMeal}; {day.meals.lunch}; {day.meals.eveningSnack}; {day.meals.dinner}
-              </li>
-              <li>
-                <strong>Hydration:</strong> {day.meals.hydrationLiters} L/day
-              </li>
-            </ul>
-            <div className="actions cardActions">
-              <input
-                className="fieldInput"
-                placeholder="Add custom drill"
-                value={customInput[String(index)]?.drill ?? ""}
-                onChange={(e) => setCustomInput((prev) => ({ ...prev, [String(index)]: { ...prev[String(index)], drill: e.target.value } }))}
-              />
-              <button className="button" onClick={() => addCustomItem(index, "drill")}>Add drill</button>
-            </div>
-            <div className="actions cardActions">
-              <input
-                className="fieldInput"
-                placeholder="Add strength exercise"
-                value={customInput[String(index)]?.strength ?? ""}
-                onChange={(e) => setCustomInput((prev) => ({ ...prev, [String(index)]: { ...prev[String(index)], strength: e.target.value } }))}
-              />
-              <button className="button" onClick={() => addCustomItem(index, "strength")}>Add strength</button>
-            </div>
-            <div className="actions cardActions">
-              <input
-                className="fieldInput"
-                placeholder="Add diet item"
-                value={customInput[String(index)]?.diet ?? ""}
-                onChange={(e) => setCustomInput((prev) => ({ ...prev, [String(index)]: { ...prev[String(index)], diet: e.target.value } }))}
-              />
-              <button className="button" onClick={() => addCustomItem(index, "diet")}>Add diet</button>
-            </div>
+            {activeTab === "skill" ? (
+              <div className="sectionBlock">
+                <h4>Skill Drills</h4>
+                <ul>
+                  <li><strong>Sport drills:</strong> {(day.sportDrills ?? []).join(" | ") || "Generated for new plans"}</li>
+                  <li><strong>Warm-up:</strong> {day.warmup.join(" | ")}</li>
+                  <li><strong>Main set:</strong> {day.mainSet.join(" | ")}</li>
+                  <li><strong>Cooldown:</strong> {day.cooldown.join(" | ")}</li>
+                </ul>
+                <div className="actions cardActions">
+                  <input
+                    className="fieldInput"
+                    placeholder="Add custom drill"
+                    value={customInput[String(itemIndex)]?.drill ?? ""}
+                    onChange={(e) => setCustomInput((prev) => ({ ...prev, [String(itemIndex)]: { ...prev[String(itemIndex)], drill: e.target.value } }))}
+                  />
+                  <button className="button" onClick={() => addCustomItem(itemIndex, "drill")}>Add drill</button>
+                </div>
+              </div>
+            ) : null}
+
+            {activeTab === "strength" ? (
+              <div className="sectionBlock">
+                <h4>Strength Training</h4>
+                <ul>
+                  <li><strong>Strength block:</strong> {(day.strengthBlock ?? []).join(" | ") || "Generated for new plans"}</li>
+                </ul>
+                <div className="actions cardActions">
+                  <input
+                    className="fieldInput"
+                    placeholder="Add strength exercise"
+                    value={customInput[String(itemIndex)]?.strength ?? ""}
+                    onChange={(e) => setCustomInput((prev) => ({ ...prev, [String(itemIndex)]: { ...prev[String(itemIndex)], strength: e.target.value } }))}
+                  />
+                  <button className="button" onClick={() => addCustomItem(itemIndex, "strength")}>Add strength</button>
+                </div>
+              </div>
+            ) : null}
+
+            {activeTab === "diet" ? (
+              <div className="sectionBlock">
+                <h4>Diet</h4>
+                <ul>
+                  <li><strong>Macros:</strong> {day.macros.calories} kcal, P {day.macros.proteinG}g, C {day.macros.carbsG}g, F {day.macros.fatsG}g</li>
+                  <li><strong>Meals:</strong> {day.meals.breakfast}; {day.meals.preWorkoutSnack}; {day.meals.postWorkoutMeal}; {day.meals.lunch}; {day.meals.eveningSnack}; {day.meals.dinner}</li>
+                  <li><strong>Hydration:</strong> {day.meals.hydrationLiters} L/day</li>
+                </ul>
+                <div className="actions cardActions">
+                  <input
+                    className="fieldInput"
+                    placeholder="Add diet item"
+                    value={customInput[String(itemIndex)]?.diet ?? ""}
+                    onChange={(e) => setCustomInput((prev) => ({ ...prev, [String(itemIndex)]: { ...prev[String(itemIndex)], diet: e.target.value } }))}
+                  />
+                  <button className="button" onClick={() => addCustomItem(itemIndex, "diet")}>Add diet</button>
+                </div>
+              </div>
+            ) : null}
           </article>
-        ))}
+          );
+        })}
       </section>
     </main>
   );
