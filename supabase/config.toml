@@ -1,5 +1,11 @@
 [functions.generate-plan]
-verify_jwt = false
+verify_jwt = true
 
 [functions.get-latest-plan]
-verify_jwt = false
+verify_jwt = true
+
+[functions.log-workout]
+verify_jwt = true
+
+[functions.get-progress]
+verify_jwt = true
