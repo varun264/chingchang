@@ -1,4 +1,4 @@
-import { generateWeeklyPlan } from "@/lib/planner/generator";
+import { generateWeeklyPlan, generateSportWeekPlan } from "@/lib/planner/generator";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 async function getAuthenticatedUser(request: Request) {
@@ -112,7 +112,9 @@ export async function POST(request: Request) {
   }
 
   const profileId = existing.profile?.id ?? crypto.randomUUID();
-  const plan = generateWeeklyPlan(profile);
+  const plan = body.sport && body.sport !== "all"
+  ? generateSportWeekPlan(profile, body.sport)
+  : generateWeeklyPlan(profile);
 
   const { error: profileError } = await auth.supabaseAdmin.from("profiles").upsert({
     id: profileId,

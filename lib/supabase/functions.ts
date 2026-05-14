@@ -8,6 +8,7 @@ export async function generatePlanViaEdge(payload: {
   trainingDaysPerWeek: number;
   level: "beginner" | "intermediate" | "advanced";
   sessionMinutes: 30 | 45 | 60 | 90;
+  sport?: string;
 }, token: string) {
   const response = await fetch(`${base}/generate-plan`, {
     method: "POST",

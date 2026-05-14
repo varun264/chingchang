@@ -56,17 +56,18 @@ const mealKeys = [
   { key: "dinner", label: "Dinner" }
 ] as const;
 
+const dayNames: Record<string, string> = {
+  Monday: "Mon", Tuesday: "Tue", Wednesday: "Wed", Thursday: "Thu",
+  Friday: "Fri", Saturday: "Sat", Sunday: "Sun"
+};
+
+const sportIcon: Record<string, string> = Object.fromEntries(sports.map((s) => [s.value, s.icon]));
+
 function norm(s: any): PlanDay {
   return {
-    id: s.id,
-    day: s.day_label ?? s.session_date,
-    sport: s.sport,
-    focus: s.focus,
-    sportDrills: s.sport_drills ?? [],
-    strengthBlock: s.strength_block ?? [],
-    warmup: s.warmup ?? [],
-    mainSet: s.main_set ?? [],
-    cooldown: s.cooldown ?? [],
+    id: s.id, day: s.day_label ?? s.session_date, sport: s.sport, focus: s.focus,
+    sportDrills: s.sport_drills ?? [], strengthBlock: s.strength_block ?? [],
+    warmup: s.warmup ?? [], mainSet: s.main_set ?? [], cooldown: s.cooldown ?? [],
     macros: { calories: s.diet?.calories ?? 0, proteinG: s.diet?.protein_g ?? 0, carbsG: s.diet?.carbs_g ?? 0, fatsG: s.diet?.fats_g ?? 0 },
     meals: { breakfast: s.diet?.breakfast ?? "", preWorkoutSnack: s.diet?.pre_workout_snack ?? "", postWorkoutMeal: s.diet?.post_workout_meal ?? "", lunch: s.diet?.lunch ?? "", eveningSnack: s.diet?.evening_snack ?? "", dinner: s.diet?.dinner ?? "", hydrationLiters: s.diet?.hydration_liters ?? 0 }
   };
@@ -90,22 +91,17 @@ export default function HomePage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [progress, setProgress] = useState<any>(null);
 
-  const filtered = sport === "all" ? plan : plan.filter((d) => d.sport === sport);
-
-  const dayOrder = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-  const sorted = [...filtered].sort((a, b) => dayOrder.indexOf(a.day) - dayOrder.indexOf(b.day));
-
+  const sorted = [...plan].sort((a, b) => ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].indexOf(a.day) - ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].indexOf(b.day));
   const stats = progress?.stats ?? { total: 0, completed: 0, avgRPE: 0, streak: 0 };
   const sessions = progress?.sessions ?? [];
   const rate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
 
   async function loadPlan(t: string) {
     const r = await getLatestPlanViaEdge(t);
-    const p: PlanDay[] = (r.sessions ?? []).map(norm);
-    setPlan(p);
+    setPlan((r.sessions ?? []).map(norm));
   }
   async function loadProg(t: string) {
-    try { setProgress(await getProgress(t)); } catch { }
+    try { setProgress(await getProgress(t)); } catch {}
   }
   async function auth(mode: "in" | "up") {
     setLoading(true); setError(""); setMsg("");
@@ -124,16 +120,22 @@ export default function HomePage() {
     await supabaseClient.auth.signOut();
     setToken(""); setEmail(""); setPlan([]); setProgress(null); setExpanded(null);
   }
-  async function createPlan() {
+  async function createPlan(s?: string) {
     if (!token) return;
     setLoading(true); setError(""); setMsg("");
     try {
-      const r = await generatePlanViaEdge(form, token);
-      const p = r.plan ?? [];
-      setPlan(p); setMsg("Plan created!"); setExpanded(p[0]?.id ?? null);
+      const r = await generatePlanViaEdge({ ...form, sport: s }, token);
+      setPlan(r.plan ?? []);
+      setMsg(`Week plan for "${getLabel(s)}" created!`);
+      setExpanded(r.plan?.[0]?.id ?? null);
       await loadProg(token);
     } catch (e: any) { setError(e.message); } finally { setLoading(false); }
   }
+
+  function getLabel(v?: string) {
+    return sports.find((s) => s.value === (v ?? sport))?.label ?? v ?? "All Sports";
+  }
+
   async function logWorkoutAction(sid: string) {
     if (!token || !sid) return;
     setLoading(true); setError("");
@@ -144,27 +146,24 @@ export default function HomePage() {
     } catch (e: any) { setError(e.message); } finally { setLoading(false); }
   }
 
-  const dayNames: Record<string, string> = { Monday: "Mon", Tuesday: "Tue", Wednesday: "Wed", Thursday: "Thu", Friday: "Fri", Saturday: "Sat", Sunday: "Sun" };
-  const sportIcon: Record<string, string> = Object.fromEntries(sports.map((s) => [s.value, s.icon]));
-
   return (
     <main className={`appShell ${dark ? "dark" : ""}`}>
       {/* Top Bar */}
       <section className="topbar">
         <div>
           <p className="kicker">Multi-Sport Training</p>
-          <h1>Your weekly plan</h1>
-          <p>Pick a sport to see your full week of workouts and diet.</p>
+          <h1>Full week plan</h1>
+          <p>Pick a sport below to see its dedicated 7-day schedule with workouts and diet.</p>
         </div>
         <div className="accountCard">
           {token ? (
             <>
               <span>Signed in as</span>
-              <strong>{email}</strong>
+              <strong style={{fontSize:"0.9rem"}}>{email}</strong>
               <div className="row">
                 <button className="toggleBtn" onClick={() => setDark(!dark)}>
                   <span className={`toggleTrack ${dark ? "toggleOn" : ""}`}><span className="toggleThumb" /></span>
-                  {dark ? "Light" : "Dark"}
+                  {dark ? "☀️ Light" : "🌙 Dark"}
                 </button>
                 <button className="button secondaryButton" onClick={signOut}>Sign out</button>
               </div>
@@ -179,7 +178,7 @@ export default function HomePage() {
                 <button className="button secondaryButton" disabled={loading} onClick={() => auth("up")}>Create</button>
                 <button className="toggleBtn" onClick={() => setDark(!dark)}>
                   <span className={`toggleTrack ${dark ? "toggleOn" : ""}`}><span className="toggleThumb" /></span>
-                  {dark ? "Light" : "Dark"}
+                  {dark ? "☀️" : "🌙"}
                 </button>
               </div>
             </>
@@ -191,27 +190,36 @@ export default function HomePage() {
       <section className="plannerPanel">
         {/* Sport chips */}
         {token ? (
-          <div className="chipRow">
-            {sports.map((sp) => (
-              <button key={sp.value} className={`chip ${sport === sp.value ? "chipActive" : ""}`} onClick={() => { setSport(sp.value); setExpanded(null); }}>
-                <span className="chipIcon">{sp.icon}</span>
-                <span>{sp.label}</span>
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="chipRow">
+              {sports.map((sp) => (
+                <button key={sp.value} className={`chip ${sport === sp.value ? "chipActive" : ""}`}
+                  onClick={() => { setSport(sp.value); setExpanded(null); }}>
+                  <span className="chipIcon">{sp.icon}</span>
+                  <span>{sp.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Action bar */}
+            <div className="actionBar">
+              <span className="chipLabel">
+                {sport === "all" ? "Mixed week (1 per sport)" : `7-day ${getLabel()} week`}
+              </span>
+              <button className="button smallButton" onClick={() => createPlan(sport === "all" ? undefined : sport)}
+                disabled={loading}>Generate {getLabel()} plan</button>
+            </div>
+          </>
         ) : null}
 
         {error ? <p className="error">{error}</p> : null}
         {msg ? <p className="successMsg">{msg}</p> : null}
-        {!token ? <p className="emptyText">Sign in to view your weekly plan.</p> : null}
+        {!token ? <p className="emptyText">Sign in to see your 7-day weekly plan.</p> : null}
         {token && !plan.length ? (
           <div className="emptyState">
-            <p className="emptyText">No plan yet.</p>
-            <button className="button" disabled={loading} onClick={createPlan}>Create my plan</button>
+            <p className="emptyText">No plan saved. Generate one now.</p>
+            <button className="button" disabled={loading} onClick={() => createPlan()}>Create my plan</button>
           </div>
-        ) : null}
-        {token && plan.length ? (
-          <button className="button secondaryButton" style={{ marginBottom: "0.75rem" }} onClick={createPlan} disabled={loading}>Regenerate plan</button>
         ) : null}
 
         {/* Week Grid */}
@@ -219,14 +227,16 @@ export default function HomePage() {
           <div className="weekGrid">
             {sorted.map((day) => {
               const isOpen = expanded === (day.id ?? day.day);
-              const status = sessions.find((s: any) => s.id === day.id)?.log;
+              const log = sessions.find((s: any) => s.id === day.id)?.log;
               return (
-                <div key={day.id ?? day.day} className={`dayCard ${isOpen ? "dayOpen" : ""}`} onClick={() => setExpanded(isOpen ? null : (day.id ?? day.day))}>
+                <div key={day.id ?? day.day}
+                  className={`dayCard ${isOpen ? "dayOpen" : ""}`}
+                  onClick={() => setExpanded(isOpen ? null : (day.id ?? day.day))}>
                   <div className="dayHeader">
                     <div className="dayMeta">
                       <span className="dayName">{dayNames[day.day] ?? day.day}</span>
-                      <span className="daySport">{sportIcon[day.sport] ?? ""} {day.sport.replace("_", " ")}</span>
-                      <Badge color={status?.completed ? "green" : "gray"}>{status?.completed ? "Done" : day.focus}</Badge>
+                      {sport === "all" ? <span className="daySport">{sportIcon[day.sport]} {day.sport.replace("_"," ")}</span> : null}
+                      <Badge color={log?.completed ? "green" : "gray"}>{log?.completed ? "✅" : day.focus}</Badge>
                     </div>
                     <span className="expandIcon">{isOpen ? "▲" : "▼"}</span>
                   </div>
@@ -234,15 +244,22 @@ export default function HomePage() {
                   {isOpen ? (
                     <div className="dayBody">
                       <div className="dayWorkout">
-                        <h4>Workout</h4>
-                        <div className="block"><strong>Warm-up</strong><div>{day.warmup.map((i, idx) => <p key={idx}>{idx + 1}. {i}</p>)}</div></div>
-                        <div className="block"><strong>Skill drills</strong><div>{day.sportDrills.map((i, idx) => <p key={idx}>{idx + 1}. {i}</p>)}</div></div>
-                        <div className="block"><strong>Strength</strong><div>{day.strengthBlock.map((i, idx) => <p key={idx}>{idx + 1}. {i}</p>)}</div></div>
-                        <div className="block"><strong>Main set</strong><div>{day.mainSet.map((i, idx) => <p key={idx}>{idx + 1}. {i}</p>)}</div></div>
-                        <div className="block"><strong>Cooldown</strong><div>{day.cooldown.map((i, idx) => <p key={idx}>{idx + 1}. {i}</p>)}</div></div>
+                        <h4>🏋️ Workout — {day.focus}</h4>
+                        {[
+                          ["Warm-up", day.warmup],
+                          ["Skill drills", day.sportDrills],
+                          ["Strength", day.strengthBlock],
+                          ["Main set", day.mainSet],
+                          ["Cooldown", day.cooldown]
+                        ].map(([title, items]) => (
+                          <div className="block" key={title as string}>
+                            <strong>{title as string}</strong>
+                            <div>{(items as string[]).map((i, idx) => <p key={idx}>• {i}</p>)}</div>
+                          </div>
+                        ))}
                       </div>
                       <div className="dayDiet">
-                        <h4>Diet</h4>
+                        <h4>🥗 Diet</h4>
                         <div className="macroRow"><span>Calories</span><strong>{day.macros.calories}</strong></div>
                         <div className="macroRow"><span>Protein</span><strong>{day.macros.proteinG}g</strong></div>
                         <div className="macroRow"><span>Carbs</span><strong>{day.macros.carbsG}g</strong></div>
@@ -258,8 +275,9 @@ export default function HomePage() {
                         </div>
                       </div>
                       <div className="dayActions">
-                        {status?.completed ? <Badge color="green">✅ Logged</Badge> : null}
-                        <button className="button smallButton" onClick={(e) => { e.stopPropagation(); logWorkoutAction(day.id ?? ""); }} disabled={loading || !day.id}>Log complete</button>
+                        {log?.completed ? <Badge color="green">✅ Logged</Badge> : null}
+                        <button className="button smallButton" onClick={(e) => { e.stopPropagation(); logWorkoutAction(day.id ?? ""); }}
+                          disabled={loading || !day.id}>Log complete</button>
                       </div>
                     </div>
                   ) : null}
@@ -269,10 +287,10 @@ export default function HomePage() {
           </div>
         ) : null}
 
-        {/* Progress Tab inline */}
+        {/* Progress */}
         {token && plan.length > 0 ? (
           <div className="progressSection">
-            <h3>Progress</h3>
+            <h3>📊 Progress</h3>
             <div className="statsRow">
               <div className="statMini"><span className="statNum">{stats.total}</span>Total</div>
               <div className="statMini"><span className="statNum green">{stats.completed}</span>Done</div>

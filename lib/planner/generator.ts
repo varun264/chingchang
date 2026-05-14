@@ -184,6 +184,41 @@ function sportMealAdjustments(sport: Sport): string {
   }
 }
 
+const sportWeekTemplate: Array<{ day: string; focus: Focus }> = [
+  { day: "Monday", focus: "skill" },
+  { day: "Tuesday", focus: "speed" },
+  { day: "Wednesday", focus: "endurance" },
+  { day: "Thursday", focus: "strength" },
+  { day: "Friday", focus: "skill" },
+  { day: "Saturday", focus: "speed" },
+  { day: "Sunday", focus: "recovery" }
+];
+
+export function generateSportWeekPlan(profile: UserProfile, sport: Sport): DayPlan[] {
+  const level = profile.level ?? "intermediate";
+  const sessionMinutes = profile.sessionMinutes ?? 60;
+
+  return sportWeekTemplate.slice(0, profile.trainingDaysPerWeek).map((template) => {
+    const workout = workoutForSport(sport);
+    const baseMeals = mealsForFocus(template.focus);
+    return {
+      day: template.day,
+      sport,
+      focus: template.focus,
+      sportDrills: scaleBlock(drillsForSport(sport), level, sessionMinutes),
+      strengthBlock: scaleBlock(strengthForSport(sport), level, sessionMinutes),
+      warmup: scaleBlock(workout.warmup, level, sessionMinutes),
+      mainSet: scaleBlock(workout.mainSet, level, sessionMinutes),
+      cooldown: workout.cooldown,
+      macros: targetsForFocus(profile, template.focus),
+      meals: {
+        ...baseMeals,
+        eveningSnack: `${baseMeals.eveningSnack} (${sportMealAdjustments(sport)})`
+      }
+    };
+  });
+}
+
 export function generateWeeklyPlan(profile: UserProfile): DayPlan[] {
   const level = profile.level ?? "intermediate";
   const sessionMinutes = profile.sessionMinutes ?? 60;

@@ -197,6 +197,35 @@ function sportMealAdjustments(sport: Sport): string {
   }
 }
 
+const sportWeekTemplate: Array<{ day: string; focus: Focus }> = [
+  { day: "Monday", focus: "skill" },
+  { day: "Tuesday", focus: "speed" },
+  { day: "Wednesday", focus: "endurance" },
+  { day: "Thursday", focus: "strength" },
+  { day: "Friday", focus: "skill" },
+  { day: "Saturday", focus: "speed" },
+  { day: "Sunday", focus: "recovery" }
+];
+
+function generateSportPlan(profile: Required<ProfileInput>, sport: Sport): DayPlan[] {
+  return sportWeekTemplate.slice(0, profile.trainingDaysPerWeek).map((t) => {
+    const workout = workoutForSport(sport);
+    const baseMeals = mealsForFocus(t.focus);
+    return {
+      day: t.day,
+      sport,
+      focus: t.focus,
+      sportDrills: scaleBlock(drillsForSport(sport), profile.level, profile.sessionMinutes),
+      strengthBlock: scaleBlock(strengthForSport(sport), profile.level, profile.sessionMinutes),
+      warmup: scaleBlock(workout.warmup, profile.level, profile.sessionMinutes),
+      mainSet: scaleBlock(workout.mainSet, profile.level, profile.sessionMinutes),
+      cooldown: workout.cooldown,
+      macros: targets(profile.weightKg, t.focus),
+      meals: { ...baseMeals, eveningSnack: `${baseMeals.eveningSnack} (${sportMealAdjustments(sport)})` }
+    };
+  });
+}
+
 function generatePlan(profile: Required<ProfileInput>): DayPlan[] {
   return weeklyTemplate.slice(0, profile.trainingDaysPerWeek).map((t) => {
     const workout = workoutForSport(t.sport);
@@ -243,11 +272,26 @@ Deno.serve(async (req) => {
     sessionMinutes: input.sessionMinutes ?? 60
   };
 
-  const plan = generatePlan(profile);
-  const profileId = crypto.randomUUID();
+  const plan = (input as any).sport && (input as any).sport !== "all"
+    ? generateSportPlan(profile, (input as any).sport as Sport)
+    : generatePlan(profile);
 
-  const { error: profileError } = await db.from("profiles").insert({
+  // Link to authenticated user
+  const userId = req.auth?.uid;
+  let profileId = crypto.randomUUID();
+
+  if (userId) {
+    const { data: existingProfile } = await db.from("profiles").select("id").eq("user_id", userId).maybeSingle();
+    if (existingProfile) {
+      profileId = existingProfile.id;
+      // Delete old sessions
+      await db.from("workout_sessions").delete().eq("profile_id", profileId);
+    }
+  }
+
+  const { error: profileError } = await db.from("profiles").upsert({
     id: profileId,
+    user_id: userId ?? null,
     name: profile.name,
     age: profile.age,
     height_cm: profile.heightCm,
@@ -264,8 +308,11 @@ Deno.serve(async (req) => {
       id: sessionId,
       profile_id: profileId,
       session_date: new Date().toISOString().split("T")[0],
+      day_label: day.day,
       sport: day.sport,
       focus: day.focus,
+      sport_drills: day.sportDrills,
+      strength_block: day.strengthBlock,
       warmup: day.warmup,
       main_set: day.mainSet,
       cooldown: day.cooldown
