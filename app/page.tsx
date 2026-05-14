@@ -45,6 +45,15 @@ const defaultProfile = {
   sessionMinutes: 60 as 30 | 45 | 60 | 90
 };
 
+const mealKeys = [
+  { key: "breakfast", label: "Breakfast" },
+  { key: "preWorkoutSnack", label: "Pre-workout" },
+  { key: "postWorkoutMeal", label: "Post-workout" },
+  { key: "lunch", label: "Lunch" },
+  { key: "eveningSnack", label: "Snack" },
+  { key: "dinner", label: "Dinner" }
+] as const;
+
 function normalizeSession(s: any): PlanDay {
   return {
     id: s.id,
@@ -93,6 +102,68 @@ function Badge({ children, color }: { children: React.ReactNode; color: string }
   return <span className={`badge badge-${color}`}>{children}</span>;
 }
 
+function RPEChart({ sessions }: { sessions: any[] }) {
+  const logged = sessions.filter((s: any) => s.log?.rpe || s.log?.rpe === 0).slice(0, 14).reverse();
+  if (logged.length < 2) return <p className="emptyText">Log a few workouts to see your trend.</p>;
+
+  const max = 10;
+  const h = 130;
+  const padding = 25;
+  const chartW = Math.max(logged.length * 50, 200);
+  const w = chartW;
+  const innerH = h - padding * 2;
+  const barW = Math.min(36, (w - padding * 2) / logged.length - 6);
+
+  const points = logged.map((s: any, i: number) => {
+    const x = padding + i * (barW + 8) + barW / 2;
+    const y = padding + innerH - (innerH * (s.log.rpe ?? 0)) / max;
+    return `${x},${y}`;
+  });
+
+  return (
+    <div className="chartWrap">
+      <h4>RPE Trend (1–10)</h4>
+      <svg viewBox={`0 0 ${w} ${h}`} className="rpeChart" preserveAspectRatio="xMidYMid meet">
+        {[2, 4, 6, 8, 10].map((tick) => {
+          const y = padding + innerH - (innerH * tick) / max;
+          return (
+            <g key={tick}>
+              <line x1={padding} y1={y} x2={w - 10} y2={y} stroke="#dbe3ee" strokeWidth={1} />
+              <text x={padding - 6} y={y + 4} textAnchor="end" fontSize={10} fill="#64748b">{tick}</text>
+            </g>
+          );
+        })}
+        <polyline points={points.join(" ")} fill="none" stroke="#2563eb" strokeWidth={2} strokeLinejoin="round" />
+        {logged.map((s: any, i: number) => {
+          const x = padding + i * (barW + 8);
+          const barH = (innerH * (s.log.rpe ?? 0)) / max;
+          const y = padding + innerH - barH;
+          const color = s.log.completed ? "#059669" : "#94a3b8";
+          return (
+            <g key={i}>
+              <rect x={x} y={y} width={barW} height={barH} rx={4} fill={color} opacity={0.7} />
+              <text x={x + barW / 2} y={h - 4} textAnchor="middle" fontSize={8} fill="#64748b">
+                {s.sport?.slice(0, 2)}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function Toggle({ on, setOn, label }: { on: boolean; setOn: (v: boolean) => void; label: string }) {
+  return (
+    <button className="toggleBtn" onClick={() => setOn(!on)} type="button">
+      <span className={`toggleTrack ${on ? "toggleOn" : ""}`}>
+        <span className="toggleThumb" />
+      </span>
+      {label}
+    </button>
+  );
+}
+
 export default function HomePage() {
   const [authForm, setAuthForm] = useState({ email: "", password: "" });
   const [sessionToken, setSessionToken] = useState("");
@@ -106,8 +177,8 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [darkMode, setDarkMode] = useState(false);
 
-  // Log state
   const [logData, setLogData] = useState({
     completed: true,
     rpe: 7,
@@ -116,6 +187,8 @@ export default function HomePage() {
     notes: ""
   });
   const [progressData, setProgressData] = useState<any>(null);
+  const [editingMeal, setEditingMeal] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
 
   const sportPlan = plan.filter((day) => day.sport === selectedSport);
   const selectedRoutine =
@@ -127,11 +200,8 @@ export default function HomePage() {
     const loadedPlan: PlanDay[] = (result.sessions ?? []).map(normalizeSession);
     setPlan(loadedPlan);
     setProfileId(result.profile?.id ?? "");
-
-    const firstSport =
-      sportOptions.find((sport) => loadedPlan.some((day) => day.sport === sport.value))
-        ?.value ?? "football";
-    const firstDay = loadedPlan.find((day) => day.sport === firstSport);
+    const firstSport = sportOptions.find((s) => loadedPlan.some((d) => d.sport === s.value))?.value ?? "football";
+    const firstDay = loadedPlan.find((d) => d.sport === firstSport);
     setSelectedSport(firstSport);
     setSelectedDayKey(firstDay ? firstDay.id ?? `${firstDay.day}-0` : "");
   }
@@ -153,15 +223,12 @@ export default function HomePage() {
       const { data, error: authError } = mode === "signin"
         ? await supabaseClient.auth.signInWithPassword({ email: authForm.email, password: authForm.password })
         : await supabaseClient.auth.signUp({ email: authForm.email, password: authForm.password });
-
       if (authError) throw authError;
-
       const token = data.session?.access_token;
       if (!token) {
         setError("Check your email to confirm the account, then sign in.");
         return;
       }
-
       setSessionToken(token);
       setAccountEmail(data.user?.email ?? authForm.email);
       await loadAccountPlan(token);
@@ -194,10 +261,10 @@ export default function HomePage() {
       const nextPlan = result.plan ?? [];
       setPlan(nextPlan);
       setProfileId(result.profileId ?? "");
-      const firstDay = nextPlan.find((day: PlanDay) => day.sport === selectedSport) ?? nextPlan[0];
+      const firstDay = nextPlan.find((d: PlanDay) => d.sport === selectedSport) ?? nextPlan[0];
       setSelectedSport(firstDay?.sport ?? "football");
       setSelectedDayKey(firstDay ? `${firstDay.day}-${nextPlan.indexOf(firstDay)}` : "");
-      setSuccessMsg("Plan created! Check your routine below.");
+      setSuccessMsg("Plan created!");
       await loadProgress(sessionToken);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create plan.");
@@ -208,7 +275,7 @@ export default function HomePage() {
 
   function handleSportChange(sport: string) {
     setSelectedSport(sport);
-    const firstDay = plan.find((day) => day.sport === sport);
+    const firstDay = plan.find((d) => d.sport === sport);
     setSelectedDayKey(firstDay ? firstDay.id ?? `${firstDay.day}-0` : "");
   }
 
@@ -228,13 +295,30 @@ export default function HomePage() {
     }
   }
 
+  function startEditMeal(mealKey: string, value: string) {
+    setEditingMeal(mealKey);
+    setEditValue(value);
+  }
+
+  function saveEditMeal() {
+    if (!editingMeal || !selectedRoutine?.id) return;
+    setPlan((prev) =>
+      prev.map((d) =>
+        d.id === selectedRoutine.id
+          ? { ...d, meals: { ...d.meals, [editingMeal]: editValue } }
+          : d
+      )
+    );
+    setEditingMeal(null);
+    setEditValue("");
+  }
+
   const stats = progressData?.stats ?? { total: 0, completed: 0, avgRPE: 0, streak: 0 };
   const sessions = progressData?.sessions ?? [];
   const completionRate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
 
   return (
-    <main className="appShell">
-      {/* Top Bar */}
+    <main className={`appShell ${darkMode ? "dark" : ""}`}>
       <section className="topbar">
         <div>
           <p className="kicker">Account Based Training</p>
@@ -246,6 +330,7 @@ export default function HomePage() {
             <>
               <span>Signed in as</span>
               <strong>{accountEmail}</strong>
+              <Toggle on={darkMode} setOn={setDarkMode} label="Dark" />
               <button className="button secondaryButton" onClick={handleSignOut} type="button">Sign out</button>
             </>
           ) : (
@@ -256,13 +341,13 @@ export default function HomePage() {
               <div className="buttonRow">
                 <button className="button" disabled={loading} onClick={() => handleAuth("signin")} type="button">Sign in</button>
                 <button className="button secondaryButton" disabled={loading} onClick={() => handleAuth("signup")} type="button">Create account</button>
+                <Toggle on={darkMode} setOn={setDarkMode} label="Dark" />
               </div>
             </>
           )}
         </div>
       </section>
 
-      {/* Planner Panel */}
       <section className="plannerPanel">
         <div className="selectorGrid">
           <label className="field">
@@ -273,18 +358,16 @@ export default function HomePage() {
               ))}
             </select>
           </label>
-
           <label className="field">
             <span className="fieldLabel">Day</span>
             <select className="fieldInput" value={selectedRoutine ? selectedRoutine.id ?? `${selectedRoutine.day}-0` : ""} onChange={(e) => setSelectedDayKey(e.target.value)} disabled={!sportPlan.length}>
-              {sportPlan.map((day, index) => (
-                <option key={day.id ?? `${day.day}-${index}`} value={day.id ?? `${day.day}-${index}`}>
+              {sportPlan.map((day, i) => (
+                <option key={day.id ?? `${day.day}-${i}`} value={day.id ?? `${day.day}-${i}`}>
                   {day.day} — {day.focus}
                 </option>
               ))}
             </select>
           </label>
-
           <div className="planActions">
             <button className="button" onClick={() => sessionToken && loadAccountPlan(sessionToken)} disabled={!sessionToken || loading} type="button">Load my plan</button>
             {!plan.length ? <button className="button secondaryButton" onClick={handleCreatePlan} disabled={!sessionToken || loading} type="button">Create my plan</button> : null}
@@ -296,16 +379,14 @@ export default function HomePage() {
         {!sessionToken ? <p className="emptyText">Sign in to view your routine.</p> : null}
         {sessionToken && !plan.length ? <p className="emptyText">No plan saved yet. Create your first plan above.</p> : null}
 
-        {/* Tabs: Routine / Log / Progress */}
         {selectedRoutine && (
           <>
-            <div className="tabPanel" role="tablist" aria-label="Dashboard sections">
+            <div className="tabPanel" role="tablist">
               <button className={activeTab === "routine" ? "tab activeTab" : "tab"} onClick={() => setActiveTab("routine")} type="button">Routine</button>
               <button className={activeTab === "log" ? "tab activeTab" : "tab"} onClick={() => setActiveTab("log")} type="button">Log Workout</button>
               <button className={activeTab === "progress" ? "tab activeTab" : "tab"} onClick={() => setActiveTab("progress")} type="button">Progress</button>
             </div>
 
-            {/* Routine Tab */}
             {activeTab === "routine" && (
               <div className="routineBoard">
                 <header className="routineHeader">
@@ -319,7 +400,6 @@ export default function HomePage() {
                     <span>P&nbsp;{selectedRoutine.macros.proteinG}g / C&nbsp;{selectedRoutine.macros.carbsG}g / F&nbsp;{selectedRoutine.macros.fatsG}g</span>
                   </div>
                 </header>
-
                 <div className="routineGrid">
                   <div className="workoutStack">
                     <RoutineList title="1. Warm-up" items={selectedRoutine.warmup} />
@@ -333,20 +413,33 @@ export default function HomePage() {
                     <p className="kicker">Diet For This Day</p>
                     <h3>Meals</h3>
                     <dl>
-                      <dt>Breakfast</dt><dd>{selectedRoutine.meals.breakfast}</dd>
-                      <dt>Pre-workout</dt><dd>{selectedRoutine.meals.preWorkoutSnack}</dd>
-                      <dt>Post-workout</dt><dd>{selectedRoutine.meals.postWorkoutMeal}</dd>
-                      <dt>Lunch</dt><dd>{selectedRoutine.meals.lunch}</dd>
-                      <dt>Snack</dt><dd>{selectedRoutine.meals.eveningSnack}</dd>
-                      <dt>Dinner</dt><dd>{selectedRoutine.meals.dinner}</dd>
-                      <dt>Hydration</dt><dd>{selectedRoutine.meals.hydrationLiters} L</dd>
+                      {mealKeys.map(({ key, label }) => (
+                        <div className="mealRow" key={key}>
+                          <dt>{label}</dt>
+                          {editingMeal === key ? (
+                            <div className="mealEdit">
+                              <input className="fieldInput" value={editValue} onChange={(e) => setEditValue(e.target.value)} />
+                              <div className="mealEditActions">
+                                <button className="button smallButton" onClick={saveEditMeal} type="button">Save</button>
+                                <button className="button secondaryButton smallButton" onClick={() => setEditingMeal(null)} type="button">Cancel</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <dd>
+                              {((selectedRoutine.meals as any)[key] as string) || "—"}
+                              <button className="iconButton" onClick={() => startEditMeal(key, (selectedRoutine.meals as any)[key] || "")} type="button" title="Edit">✎</button>
+                            </dd>
+                          )}
+                        </div>
+                      ))}
+                      <dt>Hydration</dt>
+                      <dd>{selectedRoutine.meals.hydrationLiters} L</dd>
                     </dl>
                   </aside>
                 </div>
               </div>
             )}
 
-            {/* Log Workout Tab */}
             {activeTab === "log" && (
               <div className="logBoard">
                 <h3>Log This Workout</h3>
@@ -358,19 +451,16 @@ export default function HomePage() {
                       <span>{logData.completed ? "✅ Completed" : "❌ Skipped"}</span>
                     </div>
                   </label>
-
                   <label className="logField">
                     <span className="fieldLabel">RPE (1–10)</span>
                     <input className="fieldInput" type="range" min={1} max={10} value={logData.rpe} onChange={(e) => setLogData({ ...logData, rpe: Number(e.target.value) })} />
                     <span className="rangeValue">{logData.rpe}</span>
                   </label>
-
                   <label className="logField">
                     <span className="fieldLabel">Fatigue (1–10)</span>
                     <input className="fieldInput" type="range" min={1} max={10} value={logData.fatigueScore} onChange={(e) => setLogData({ ...logData, fatigueScore: Number(e.target.value) })} />
                     <span className="rangeValue">{logData.fatigueScore}</span>
                   </label>
-
                   <label className="logField">
                     <span className="fieldLabel">Mood</span>
                     <select className="fieldInput" value={logData.mood} onChange={(e) => setLogData({ ...logData, mood: e.target.value as any })}>
@@ -381,24 +471,20 @@ export default function HomePage() {
                       <option value="exhausted">💀 Exhausted</option>
                     </select>
                   </label>
-
                   <label className="logField logFieldFull">
                     <span className="fieldLabel">Notes</span>
                     <textarea className="fieldInput logTextarea" rows={3} placeholder="How did it feel?..." value={logData.notes} onChange={(e) => setLogData({ ...logData, notes: e.target.value })} />
                   </label>
                 </div>
-
                 <button className="button logSubmitBtn" onClick={handleLogSubmit} disabled={loading} type="button">
                   {loading ? "Saving..." : "Save Workout Log"}
                 </button>
               </div>
             )}
 
-            {/* Progress Tab */}
             {activeTab === "progress" && (
               <div className="progressBoard">
                 <h3>Your Progress</h3>
-
                 <div className="statsGrid">
                   <div className="statCard">
                     <div className="statNumber">{stats.total}</div>
@@ -417,6 +503,8 @@ export default function HomePage() {
                     <div className="statLabel">Current Streak</div>
                   </div>
                 </div>
+
+                <RPEChart sessions={sessions} />
 
                 <div className="completionBarWrap">
                   <div className="completionLabel">
@@ -437,9 +525,7 @@ export default function HomePage() {
                       {sessions.map((s: any, i: number) => (
                         <li key={i} className="sessionItem">
                           <div className="sessionInfo">
-                            <Badge color={s.log?.completed ? "green" : "gray"}>
-                              {s.log?.completed ? "Done" : "Missed"}
-                            </Badge>
+                            <Badge color={s.log?.completed ? "green" : "gray"}>{s.log?.completed ? "✅ Done" : "Missed"}</Badge>
                             <span className="sessionSport">{s.sport.replace("_", " ")}</span>
                             <span className="sessionDay">{s.day_label ?? s.session_date}</span>
                             <span className="sessionFocus">{s.focus}</span>
