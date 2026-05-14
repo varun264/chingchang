@@ -5,6 +5,7 @@ import { generatePlanViaEdge, getLatestPlanViaEdge } from "@/lib/supabase/functi
 import { supabaseClient } from "@/lib/supabase/client";
 
 type PlanDay = {
+  id?: string;
   day: string;
   sport: string;
   focus: string;
@@ -26,7 +27,6 @@ type PlanDay = {
 };
 
 const sportOptions = [
-  { value: "all", label: "All sports" },
   { value: "table_tennis", label: "Table Tennis" },
   { value: "badminton", label: "Badminton" },
   { value: "cricket", label: "Cricket" },
@@ -35,64 +35,85 @@ const sportOptions = [
   { value: "strength", label: "Strength" }
 ];
 
-const tabs = [
-  { value: "skill", label: "Skill drills" },
-  { value: "strength", label: "Strength training" },
-  { value: "diet", label: "Diet" }
-] as const;
+const defaultProfile = {
+  name: "Varun",
+  age: 20,
+  heightCm: 172,
+  weightKg: 68,
+  trainingDaysPerWeek: 7,
+  level: "intermediate" as "beginner" | "intermediate" | "advanced",
+  sessionMinutes: 60 as 30 | 45 | 60 | 90
+};
+
+function normalizeSession(s: any): PlanDay {
+  return {
+    id: s.id,
+    day: s.day_label ?? s.session_date,
+    sport: s.sport,
+    focus: s.focus,
+    sportDrills: s.sport_drills ?? [],
+    strengthBlock: s.strength_block ?? [],
+    warmup: s.warmup ?? [],
+    mainSet: s.main_set ?? [],
+    cooldown: s.cooldown ?? [],
+    macros: {
+      calories: s.diet?.calories ?? 0,
+      proteinG: s.diet?.protein_g ?? 0,
+      carbsG: s.diet?.carbs_g ?? 0,
+      fatsG: s.diet?.fats_g ?? 0
+    },
+    meals: {
+      breakfast: s.diet?.breakfast ?? "",
+      preWorkoutSnack: s.diet?.pre_workout_snack ?? "",
+      postWorkoutMeal: s.diet?.post_workout_meal ?? "",
+      lunch: s.diet?.lunch ?? "",
+      eveningSnack: s.diet?.evening_snack ?? "",
+      dinner: s.diet?.dinner ?? "",
+      hydrationLiters: s.diet?.hydration_liters ?? 0
+    }
+  };
+}
+
+function RoutineList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <section className="routineSection">
+      <h3>{title}</h3>
+      {items.length ? (
+        <ol>
+          {items.map((item, index) => <li key={`${title}-${index}`}>{item}</li>)}
+        </ol>
+      ) : (
+        <p className="emptyText">No items planned yet.</p>
+      )}
+    </section>
+  );
+}
 
 export default function HomePage() {
   const [authForm, setAuthForm] = useState({ email: "", password: "" });
   const [sessionToken, setSessionToken] = useState("");
   const [accountEmail, setAccountEmail] = useState("");
-  const [form, setForm] = useState({
-    name: "Varun",
-    age: 20,
-    heightCm: 172,
-    weightKg: 68,
-    trainingDaysPerWeek: 7,
-    level: "intermediate" as "beginner" | "intermediate" | "advanced",
-    sessionMinutes: 60 as 30 | 45 | 60 | 90
-  });
+  const [form, setForm] = useState(defaultProfile);
   const [plan, setPlan] = useState<PlanDay[]>([]);
-  const [profileId, setProfileId] = useState<string>("");
+  const [profileId, setProfileId] = useState("");
+  const [selectedSport, setSelectedSport] = useState("football");
+  const [selectedDayKey, setSelectedDayKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [customInput, setCustomInput] = useState<Record<string, { drill: string; strength: string; diet: string }>>({});
-  const [selectedSport, setSelectedSport] = useState("all");
-  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]["value"]>("skill");
 
-  const visiblePlan = selectedSport === "all" ? plan : plan.filter((day) => day.sport === selectedSport);
+  const sportPlan = plan.filter((day) => day.sport === selectedSport);
+  const selectedRoutine = sportPlan.find((day, index) => (day.id ?? `${day.day}-${index}`) === selectedDayKey) ?? sportPlan[0];
 
   async function loadAccountPlan(token: string) {
     const result = await getLatestPlanViaEdge(token);
-    const fromSessions = (result.sessions ?? []).map((s: any): PlanDay => ({
-      day: s.session_date,
-      sport: s.sport,
-      focus: s.focus,
-      sportDrills: [],
-      strengthBlock: [],
-      warmup: s.warmup,
-      mainSet: s.main_set,
-      cooldown: s.cooldown,
-      macros: {
-        calories: s.diet?.calories ?? 0,
-        proteinG: s.diet?.protein_g ?? 0,
-        carbsG: s.diet?.carbs_g ?? 0,
-        fatsG: s.diet?.fats_g ?? 0
-      },
-      meals: {
-        breakfast: s.diet?.breakfast ?? "",
-        preWorkoutSnack: s.diet?.pre_workout_snack ?? "",
-        postWorkoutMeal: s.diet?.post_workout_meal ?? "",
-        lunch: s.diet?.lunch ?? "",
-        eveningSnack: s.diet?.evening_snack ?? "",
-        dinner: s.diet?.dinner ?? "",
-        hydrationLiters: s.diet?.hydration_liters ?? 0
-      }
-    }));
-    setPlan(fromSessions);
+    const loadedPlan: PlanDay[] = (result.sessions ?? []).map(normalizeSession);
+    setPlan(loadedPlan);
     setProfileId(result.profile?.id ?? "");
+
+    const firstSport = sportOptions.find((sport) => loadedPlan.some((day) => day.sport === sport.value))?.value ?? "football";
+    const firstDay = loadedPlan.find((day) => day.sport === firstSport);
+    setSelectedSport(firstSport);
+    setSelectedDayKey(firstDay ? firstDay.id ?? `${firstDay.day}-0` : "");
   }
 
   async function handleAuth(mode: "signin" | "signup") {
@@ -129,36 +150,12 @@ export default function HomePage() {
     setAccountEmail("");
     setPlan([]);
     setProfileId("");
+    setSelectedDayKey("");
   }
 
-  function addCustomItem(index: number, kind: "drill" | "strength" | "diet") {
-    const key = String(index);
-    const value = customInput[key]?.[kind]?.trim();
-    if (!value) {
-      return;
-    }
-
-    setPlan((prev) =>
-      prev.map((day, i) => {
-        if (i !== index) {
-          return day;
-        }
-        if (kind === "drill") {
-          return { ...day, sportDrills: [...(day.sportDrills ?? []), value] };
-        }
-        if (kind === "strength") {
-          return { ...day, strengthBlock: [...(day.strengthBlock ?? []), value] };
-        }
-        return { ...day, meals: { ...day.meals, dinner: `${day.meals.dinner}; ${value}` } };
-      })
-    );
-
-    setCustomInput((prev) => ({ ...prev, [key]: { ...prev[key], [kind]: "" } }));
-  }
-
-  async function handleGenerate() {
+  async function handleCreatePlan() {
     if (!sessionToken) {
-      setError("Sign in before creating or updating your plan.");
+      setError("Sign in before creating your account plan.");
       return;
     }
 
@@ -166,244 +163,123 @@ export default function HomePage() {
     setError("");
     try {
       const result = await generatePlanViaEdge(form, sessionToken);
-      setPlan(result.plan ?? []);
+      const nextPlan = result.plan ?? [];
+      setPlan(nextPlan);
       setProfileId(result.profileId ?? "");
+      const firstDay = nextPlan.find((day: PlanDay) => day.sport === selectedSport) ?? nextPlan[0];
+      setSelectedSport(firstDay?.sport ?? "football");
+      setSelectedDayKey(firstDay ? `${firstDay.day}-0` : "");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not generate plan.");
+      setError(e instanceof Error ? e.message : "Could not create plan.");
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleFetchLatest() {
-    if (!sessionToken) {
-      setError("Sign in to load your account plan.");
-      return;
-    }
-    setLoading(true);
-    setError("");
-    try {
-      await loadAccountPlan(sessionToken);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load latest plan.");
-    } finally {
-      setLoading(false);
-    }
+  function handleSportChange(sport: string) {
+    setSelectedSport(sport);
+    const firstDay = plan.find((day) => day.sport === sport);
+    setSelectedDayKey(firstDay ? firstDay.id ?? `${firstDay.day}-0` : "");
   }
 
   return (
-    <main className="container">
-      <section className="hero">
-        <div className="heroTop">
-          <div>
-            <p className="kicker">Performance Planner</p>
-            <h1>Train like an all-round athlete</h1>
-            <p>Sport-specific drills, strength work, and diet plans for TT, badminton, cricket, football, agility, and gym training.</p>
-          </div>
-          <div className="heroBadge">ADMIN: {form.name.toUpperCase()}</div>
+    <main className="appShell">
+      <section className="topbar">
+        <div>
+          <p className="kicker">Account Based Training</p>
+          <h1>Pick a sport. Pick a day. Start the routine.</h1>
+          <p>Your workout and diet are loaded from your signed-in account.</p>
         </div>
+        <div className="accountCard">
+          {sessionToken ? (
+            <>
+              <span>Signed in as</span>
+              <strong>{accountEmail}</strong>
+              <button className="button secondaryButton" onClick={handleSignOut} type="button">Sign out</button>
+            </>
+          ) : (
+            <>
+              <span>Account</span>
+              <input className="fieldInput" placeholder="email" value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} />
+              <input className="fieldInput" placeholder="password" type="password" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} />
+              <div className="buttonRow">
+                <button className="button" disabled={loading} onClick={() => handleAuth("signin")} type="button">Sign in</button>
+                <button className="button secondaryButton" disabled={loading} onClick={() => handleAuth("signup")} type="button">Create account</button>
+              </div>
+            </>
+          )}
+        </div>
+      </section>
 
-        <div className="dashboardControls">
-          <div className="authPanel">
-            {sessionToken ? (
-              <>
-                <span>Signed in</span>
-                <strong>{accountEmail}</strong>
-                <button className="button secondaryButton" onClick={handleSignOut} type="button">Sign out</button>
-              </>
-            ) : (
-              <>
-                <span>Account</span>
-                <input className="fieldInput" placeholder="email" value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} />
-                <input className="fieldInput" placeholder="password" type="password" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} />
-                <div className="authActions">
-                  <button className="button" disabled={loading} onClick={() => handleAuth("signin")} type="button">Sign in</button>
-                  <button className="button secondaryButton" disabled={loading} onClick={() => handleAuth("signup")} type="button">Create account</button>
-                </div>
-              </>
-            )}
-          </div>
+      <section className="plannerPanel">
+        <div className="selectorGrid">
+          <label className="field">
+            <span className="fieldLabel">Sports</span>
+            <select className="fieldInput" value={selectedSport} onChange={(event) => handleSportChange(event.target.value)} disabled={!plan.length}>
+              {sportOptions.map((sport) => <option key={sport.value} value={sport.value}>{sport.label}</option>)}
+            </select>
+          </label>
 
-          <details className="dropdownPanel">
-            <summary>Profile</summary>
-            <div className="dropdownBody">
-              <p><strong>{form.name}</strong> - admin profile</p>
-              <p>{form.age} yrs, {form.heightCm} cm, {form.weightKg} kg</p>
-              <p>{form.trainingDaysPerWeek} training days/week</p>
-              <p>{form.level} level, {form.sessionMinutes} min sessions</p>
-            </div>
-          </details>
-
-          <label className="selectPanel">
-            <span>Sports</span>
-            <select value={selectedSport} onChange={(event) => setSelectedSport(event.target.value)}>
-              {sportOptions.map((sport) => (
-                <option key={sport.value} value={sport.value}>{sport.label}</option>
+          <label className="field">
+            <span className="fieldLabel">Day</span>
+            <select className="fieldInput" value={selectedRoutine ? selectedRoutine.id ?? `${selectedRoutine.day}-0` : ""} onChange={(event) => setSelectedDayKey(event.target.value)} disabled={!sportPlan.length}>
+              {sportPlan.map((day, index) => (
+                <option key={day.id ?? `${day.day}-${index}`} value={day.id ?? `${day.day}-${index}`}>
+                  {day.day} - {day.focus}
+                </option>
               ))}
             </select>
           </label>
 
-          <div className="tabPanel" role="tablist" aria-label="Sport sections">
-            {tabs.map((tab) => (
-              <button
-                className={activeTab === tab.value ? "tab activeTab" : "tab"}
-                key={tab.value}
-                onClick={() => setActiveTab(tab.value)}
-                type="button"
-              >
-                {tab.label}
-              </button>
-            ))}
+          <div className="planActions">
+            <button className="button" onClick={() => sessionToken && loadAccountPlan(sessionToken)} disabled={!sessionToken || loading} type="button">Load my saved plan</button>
+            {!plan.length ? <button className="button secondaryButton" onClick={handleCreatePlan} disabled={!sessionToken || loading} type="button">Create my first plan</button> : null}
           </div>
         </div>
 
-        <div className="targets">
-          <div className="targetCard">
-            <div className="targetLabel">Training Days</div>
-            <div className="targetValue">{form.trainingDaysPerWeek}/week</div>
-          </div>
-          <div className="targetCard">
-            <div className="targetLabel">Body Weight</div>
-            <div className="targetValue">{form.weightKg} kg</div>
-          </div>
-          <div className="targetCard">
-            <div className="targetLabel">Primary Goal</div>
-            <div className="targetValue">All-round athleticism</div>
-          </div>
-        </div>
-
-        <div className="targets formGrid">
-          <label className="field targetCard">
-            <span className="fieldLabel">Name</span>
-            <input className="fieldInput" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </label>
-          <label className="field targetCard">
-            <span className="fieldLabel">Age</span>
-            <input className="fieldInput" type="number" value={form.age} onChange={(e) => setForm({ ...form, age: Number(e.target.value) })} />
-          </label>
-          <label className="field targetCard">
-            <span className="fieldLabel">Height (cm)</span>
-            <input className="fieldInput" type="number" value={form.heightCm} onChange={(e) => setForm({ ...form, heightCm: Number(e.target.value) })} />
-          </label>
-          <label className="field targetCard">
-            <span className="fieldLabel">Weight (kg)</span>
-            <input className="fieldInput" type="number" value={form.weightKg} onChange={(e) => setForm({ ...form, weightKg: Number(e.target.value) })} />
-          </label>
-          <label className="field targetCard">
-            <span className="fieldLabel">Training days/week</span>
-            <input
-              className="fieldInput"
-              type="number"
-              min={1}
-              max={7}
-              value={form.trainingDaysPerWeek}
-              onChange={(e) => setForm({ ...form, trainingDaysPerWeek: Number(e.target.value) })}
-            />
-          </label>
-          <label className="field targetCard">
-            <span className="fieldLabel">Level</span>
-            <select className="fieldInput" value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value as "beginner" | "intermediate" | "advanced" })}>
-              <option value="beginner">Beginner</option>
-              <option value="intermediate">Intermediate</option>
-              <option value="advanced">Advanced</option>
-            </select>
-          </label>
-          <label className="field targetCard">
-            <span className="fieldLabel">Session duration</span>
-            <select className="fieldInput" value={form.sessionMinutes} onChange={(e) => setForm({ ...form, sessionMinutes: Number(e.target.value) as 30 | 45 | 60 | 90 })}>
-              <option value={30}>30 min</option>
-              <option value={45}>45 min</option>
-              <option value={60}>60 min</option>
-              <option value={90}>90 min</option>
-            </select>
-          </label>
-        </div>
-
-        <div className="actions">
-          <button onClick={handleGenerate} disabled={loading} className="button">
-            {loading ? "Working..." : "Create / update my account plan"}
-          </button>
-          <button onClick={handleFetchLatest} disabled={loading} className="button">
-            Load my saved plan
-          </button>
-          {profileId ? <span className="profileChip">Profile: {profileId}</span> : null}
-        </div>
         {error ? <p className="error">{error}</p> : null}
-      </section>
+        {!sessionToken ? <p className="emptyText">Sign in to view the routine attached to your account.</p> : null}
+        {sessionToken && !plan.length ? <p className="emptyText">No plan is saved yet. Create your first account plan once, then it will load from your account.</p> : null}
 
-      <section className="days">
-        {visiblePlan.map((day, index) => {
-          const planIndex = plan.findIndex((item) => item.day === day.day && item.sport === day.sport && item.focus === day.focus);
-          const itemIndex = planIndex >= 0 ? planIndex : index;
+        {selectedRoutine ? (
+          <div className="routineBoard">
+            <header className="routineHeader">
+              <div>
+                <p className="kicker">Ready Workout</p>
+                <h2>{selectedRoutine.sport.replace("_", " ")} - {selectedRoutine.focus}</h2>
+                <p>{selectedRoutine.day}</p>
+              </div>
+              <div className="macroCard">
+                <strong>{selectedRoutine.macros.calories} kcal</strong>
+                <span>P {selectedRoutine.macros.proteinG}g / C {selectedRoutine.macros.carbsG}g / F {selectedRoutine.macros.fatsG}g</span>
+              </div>
+            </header>
 
-          return (
-          <article className="card" key={`${day.day}-${day.sport}-${index}`}>
-            <div className="cardHead">
-              <h3>{day.day}</h3>
-              <div className="pill">{day.sport.replace("_", " ")} - {day.focus}</div>
+            <div className="routineGrid">
+              <div className="workoutStack">
+                <RoutineList title="1. Warm-up" items={selectedRoutine.warmup} />
+                <RoutineList title="2. Skill drills" items={selectedRoutine.sportDrills} />
+                <RoutineList title="3. Strength training" items={selectedRoutine.strengthBlock} />
+                <RoutineList title="4. Main workout" items={selectedRoutine.mainSet} />
+                <RoutineList title="5. Cooldown" items={selectedRoutine.cooldown} />
+              </div>
+
+              <aside className="dietCard">
+                <p className="kicker">Diet For This Day</p>
+                <h3>Meals</h3>
+                <dl>
+                  <dt>Breakfast</dt><dd>{selectedRoutine.meals.breakfast}</dd>
+                  <dt>Pre-workout</dt><dd>{selectedRoutine.meals.preWorkoutSnack}</dd>
+                  <dt>Post-workout</dt><dd>{selectedRoutine.meals.postWorkoutMeal}</dd>
+                  <dt>Lunch</dt><dd>{selectedRoutine.meals.lunch}</dd>
+                  <dt>Snack</dt><dd>{selectedRoutine.meals.eveningSnack}</dd>
+                  <dt>Dinner</dt><dd>{selectedRoutine.meals.dinner}</dd>
+                  <dt>Hydration</dt><dd>{selectedRoutine.meals.hydrationLiters} L</dd>
+                </dl>
+              </aside>
             </div>
-
-            {activeTab === "skill" ? (
-              <div className="sectionBlock">
-                <h4>Skill Drills</h4>
-                <ul>
-                  <li><strong>Sport drills:</strong> {(day.sportDrills ?? []).join(" | ") || "Generated for new plans"}</li>
-                  <li><strong>Warm-up:</strong> {day.warmup.join(" | ")}</li>
-                  <li><strong>Main set:</strong> {day.mainSet.join(" | ")}</li>
-                  <li><strong>Cooldown:</strong> {day.cooldown.join(" | ")}</li>
-                </ul>
-                <div className="actions cardActions">
-                  <input
-                    className="fieldInput"
-                    placeholder="Add custom drill"
-                    value={customInput[String(itemIndex)]?.drill ?? ""}
-                    onChange={(e) => setCustomInput((prev) => ({ ...prev, [String(itemIndex)]: { ...prev[String(itemIndex)], drill: e.target.value } }))}
-                  />
-                  <button className="button" onClick={() => addCustomItem(itemIndex, "drill")}>Add drill</button>
-                </div>
-              </div>
-            ) : null}
-
-            {activeTab === "strength" ? (
-              <div className="sectionBlock">
-                <h4>Strength Training</h4>
-                <ul>
-                  <li><strong>Strength block:</strong> {(day.strengthBlock ?? []).join(" | ") || "Generated for new plans"}</li>
-                </ul>
-                <div className="actions cardActions">
-                  <input
-                    className="fieldInput"
-                    placeholder="Add strength exercise"
-                    value={customInput[String(itemIndex)]?.strength ?? ""}
-                    onChange={(e) => setCustomInput((prev) => ({ ...prev, [String(itemIndex)]: { ...prev[String(itemIndex)], strength: e.target.value } }))}
-                  />
-                  <button className="button" onClick={() => addCustomItem(itemIndex, "strength")}>Add strength</button>
-                </div>
-              </div>
-            ) : null}
-
-            {activeTab === "diet" ? (
-              <div className="sectionBlock">
-                <h4>Diet</h4>
-                <ul>
-                  <li><strong>Macros:</strong> {day.macros.calories} kcal, P {day.macros.proteinG}g, C {day.macros.carbsG}g, F {day.macros.fatsG}g</li>
-                  <li><strong>Meals:</strong> {day.meals.breakfast}; {day.meals.preWorkoutSnack}; {day.meals.postWorkoutMeal}; {day.meals.lunch}; {day.meals.eveningSnack}; {day.meals.dinner}</li>
-                  <li><strong>Hydration:</strong> {day.meals.hydrationLiters} L/day</li>
-                </ul>
-                <div className="actions cardActions">
-                  <input
-                    className="fieldInput"
-                    placeholder="Add diet item"
-                    value={customInput[String(itemIndex)]?.diet ?? ""}
-                    onChange={(e) => setCustomInput((prev) => ({ ...prev, [String(itemIndex)]: { ...prev[String(itemIndex)], diet: e.target.value } }))}
-                  />
-                  <button className="button" onClick={() => addCustomItem(itemIndex, "diet")}>Add diet</button>
-                </div>
-              </div>
-            ) : null}
-          </article>
-          );
-        })}
+          </div>
+        ) : null}
       </section>
     </main>
   );

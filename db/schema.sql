@@ -16,13 +16,20 @@ create table if not exists workout_sessions (
   id uuid primary key,
   profile_id uuid not null references profiles(id) on delete cascade,
   session_date date not null,
+  day_label text,
   sport text not null,
   focus text not null,
+  sport_drills jsonb not null default '[]'::jsonb,
+  strength_block jsonb not null default '[]'::jsonb,
   warmup jsonb not null,
   main_set jsonb not null,
   cooldown jsonb not null,
   created_at timestamptz not null default now()
 );
+
+alter table workout_sessions add column if not exists sport_drills jsonb not null default '[]'::jsonb;
+alter table workout_sessions add column if not exists strength_block jsonb not null default '[]'::jsonb;
+alter table workout_sessions add column if not exists day_label text;
 
 create table if not exists diet_plans (
   id uuid primary key,

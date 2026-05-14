@@ -37,7 +37,7 @@ async function loadAccountPlan(supabaseAdmin: NonNullable<ReturnType<typeof getS
 
   const { data: sessions, error: sessionError } = await supabaseAdmin
     .from("workout_sessions")
-    .select("id, session_date, sport, focus, warmup, main_set, cooldown, created_at")
+    .select("id, session_date, day_label, sport, focus, sport_drills, strength_block, warmup, main_set, cooldown, created_at")
     .eq("profile_id", profile.id)
     .order("created_at", { ascending: true });
 
@@ -135,8 +135,11 @@ export async function POST(request: Request) {
       id: sessionId,
       profile_id: profileId,
       session_date: new Date().toISOString().split("T")[0],
+      day_label: day.day,
       sport: day.sport,
       focus: day.focus,
+      sport_drills: day.sportDrills,
+      strength_block: day.strengthBlock,
       warmup: day.warmup,
       main_set: day.mainSet,
       cooldown: day.cooldown
