@@ -48,12 +48,21 @@ create table if not exists diet_plans (
   created_at timestamptz not null default now()
 );
 
+-- Create workout_logs if it doesn't exist
 create table if not exists workout_logs (
-  id uuid primary key,
-  workout_session_id uuid not null references workout_sessions(id) on delete cascade,
+  id uuid primary key default gen_random_uuid(),
   completed boolean not null default false,
   rpe int check (rpe between 1 and 10),
   fatigue_score int check (fatigue_score between 1 and 10),
+  mood text check (mood in ('energized','good','neutral','tired','exhausted')),
   notes text,
-  created_at timestamptz not null default now()
+  logged_at timestamptz not null default now()
 );
+
+-- Add session_id column if missing
+alter table workout_logs add column if not exists session_id uuid references workout_sessions(id) on delete cascade;
+
+-- Add log_id column if missing (for upsert idempotency)
+alter table workout_logs add column if not exists log_id uuid;
+
+create index if not exists workout_logs_session_id_idx on workout_logs(session_id);

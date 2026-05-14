@@ -38,3 +38,42 @@ export async function getLatestPlanViaEdge(token: string) {
 
   return response.json();
 }
+
+export async function logWorkout(token: string, sessionId: string, data: {
+  completed: boolean;
+  rpe?: number;
+  fatigueScore?: number;
+  mood?: "energized" | "good" | "neutral" | "tired" | "exhausted";
+  notes?: string;
+}) {
+  const response = await fetch("/api/log", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({ sessionId, ...data })
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error ?? "Failed to log workout.");
+  }
+
+  return response.json();
+}
+
+export async function getProgress(token: string) {
+  const response = await fetch("/api/log", {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error ?? "Failed to fetch progress.");
+  }
+
+  return response.json();
+}

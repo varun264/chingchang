@@ -9,6 +9,7 @@
   --accent-dark: #1d4ed8;
   --green: #059669;
   --danger: #b42318;
+  --gold: #d97706;
 }
 
 * {
@@ -35,15 +36,20 @@ body {
 .plannerPanel,
 .accountCard,
 .routineBoard,
+.logBoard,
+.progressBoard,
 .routineSection,
 .dietCard,
-.macroCard {
+.macroCard,
+.statCard,
+.badge {
   border: 1px solid rgba(219, 227, 238, 0.9);
   background: rgba(255, 255, 255, 0.88);
   box-shadow: 0 22px 56px rgba(15, 23, 42, 0.1);
   backdrop-filter: blur(16px);
 }
 
+/* Topbar */
 .topbar {
   display: grid;
   grid-template-columns: 1fr minmax(280px, 360px);
@@ -62,9 +68,7 @@ body {
   text-transform: uppercase;
 }
 
-h1,
-h2,
-h3 {
+h1, h2, h3 {
   letter-spacing: -0.04em;
 }
 
@@ -81,6 +85,7 @@ h1 {
   color: var(--muted);
 }
 
+/* Account Card */
 .accountCard {
   display: grid;
   gap: 0.55rem;
@@ -102,6 +107,7 @@ h1 {
   flex-wrap: wrap;
 }
 
+/* Inputs & Buttons */
 .fieldInput {
   width: 100%;
   border: 1px solid var(--line);
@@ -110,6 +116,7 @@ h1 {
   color: var(--text);
   padding: 0.76rem 0.82rem;
   outline: none;
+  font-size: 0.95rem;
 }
 
 .fieldInput:focus {
@@ -125,6 +132,8 @@ h1 {
   padding: 0.75rem 1rem;
   cursor: pointer;
   font-weight: 850;
+  font-size: 0.9rem;
+  transition: opacity 0.15s;
 }
 
 .button:disabled {
@@ -138,6 +147,7 @@ h1 {
   color: var(--text);
 }
 
+/* Planner Panel */
 .plannerPanel {
   margin-top: 1rem;
   border-radius: 1.6rem;
@@ -162,10 +172,45 @@ h1 {
   font-weight: 700;
 }
 
-.emptyText {
-  margin: 1rem 0 0;
+.successMsg {
+  margin: 0.85rem 0 0;
+  color: var(--green);
+  font-weight: 700;
 }
 
+.emptyText {
+  margin: 1rem 0 0;
+  color: var(--muted);
+}
+
+/* Tabs */
+.tabPanel {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.tab {
+  border: 1px solid var(--line);
+  background: #fffdf8;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 0.52rem 0.78rem;
+  cursor: pointer;
+  font-weight: 850;
+  font-size: 0.88rem;
+  transition: all 0.15s;
+}
+
+.activeTab {
+  border-color: var(--accent-dark);
+  background: linear-gradient(180deg, #3b82f6, var(--accent-dark));
+  color: #fff;
+}
+
+/* Routine Board */
 .routineBoard {
   margin-top: 1rem;
   border-radius: 1.35rem;
@@ -194,6 +239,7 @@ h1 {
   min-width: 220px;
   border-radius: 1rem;
   padding: 0.9rem;
+  text-align: right;
 }
 
 .macroCard strong {
@@ -227,6 +273,8 @@ h1 {
 .routineSection h3,
 .dietCard h3 {
   margin: 0 0 0.65rem;
+  color: var(--accent-dark);
+  font-size: 1rem;
 }
 
 ol {
@@ -247,23 +295,235 @@ li {
   top: 1rem;
 }
 
-dl {
+.dietCard dl {
   display: grid;
   gap: 0.55rem;
   margin: 0;
 }
 
-dt {
+.dietCard dt {
   color: var(--accent-dark);
   font-weight: 900;
 }
 
-dd {
+.dietCard dd {
   margin: -0.45rem 0 0;
   color: #334155;
   line-height: 1.45;
 }
 
+/* Log Board */
+.logBoard {
+  margin-top: 1rem;
+  border-radius: 1.35rem;
+  padding: clamp(1rem, 2.5vw, 1.35rem);
+}
+
+.logBoard h3 {
+  margin: 0 0 1rem;
+  font-size: 1.3rem;
+}
+
+.logGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.logField {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.logFieldFull {
+  grid-column: 1 / -1;
+}
+
+.rangeValue {
+  font-weight: 800;
+  color: var(--accent);
+  font-size: 1.1rem;
+  text-align: center;
+}
+
+.checkboxWrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+}
+
+.checkboxWrap input[type="checkbox"] {
+  width: 1.3rem;
+  height: 1.3rem;
+  accent-color: var(--accent);
+}
+
+.logTextarea {
+  resize: vertical;
+  min-height: 70px;
+}
+
+.logSubmitBtn {
+  margin-top: 1rem;
+  width: 100%;
+  max-width: 320px;
+}
+
+/* Progress Board */
+.progressBoard {
+  margin-top: 1rem;
+  border-radius: 1.35rem;
+  padding: clamp(1rem, 2.5vw, 1.35rem);
+}
+
+.progressBoard h3 {
+  margin: 0 0 1rem;
+  font-size: 1.3rem;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.statCard {
+  border-radius: 1rem;
+  padding: 1rem;
+  text-align: center;
+}
+
+.statNumber {
+  font-size: 2rem;
+  font-weight: 900;
+  color: var(--text);
+  line-height: 1;
+}
+
+.statGreen { color: var(--green); }
+.statBlue  { color: var(--accent); }
+.statGold  { color: var(--gold); }
+
+.statLabel {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 0.3rem;
+  font-weight: 700;
+}
+
+.completionBarWrap {
+  margin-bottom: 1.25rem;
+}
+
+.completionLabel {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.completionBar {
+  height: 10px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.completionFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--green));
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.recentSessions h4 {
+  margin: 0 0 0.65rem;
+}
+
+.sessionList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.sessionItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.75rem;
+  background: rgba(248, 250, 252, 0.7);
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.sessionInfo {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.sessionSport {
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.sessionDay {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.sessionFocus {
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.sessionLogInfo {
+  display: flex;
+  gap: 0.35rem;
+}
+
+/* Badges */
+.badge {
+  display: inline-block;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 850;
+}
+
+.badge-green {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.badge-gray {
+  background: #f3f4f6;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+
+.badge-blue {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.badge-gold {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+/* Responsive */
 @media (max-width: 900px) {
   .topbar,
   .selectorGrid,
@@ -278,6 +538,7 @@ dd {
 
   .macroCard {
     width: 100%;
+    text-align: left;
   }
 
   .dietCard {
@@ -287,12 +548,18 @@ dd {
 
 @media (max-width: 560px) {
   .appShell {
-    width: min(1180px, 100% - 0.9rem);
+    width: min(1180px, 100% - 0.7rem);
   }
 
   .button,
   .buttonRow .button,
-  .planActions .button {
+  .planActions .button,
+  .logSubmitBtn {
     width: 100%;
+  }
+
+  .sessionItem {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
