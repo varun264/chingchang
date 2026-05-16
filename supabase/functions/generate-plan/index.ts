@@ -34,11 +34,150 @@ type DayPlan = {
   };
 };
 
+type GeminiDay = {
+  day: string;
+  sport: string;
+  focus: string;
+  warmup: string;
+  mainSet: string;
+  cooldown: string;
+  sportDrills: string;
+  strengthBlock: string;
+  macros: { calories: number; proteinG: number; carbsG: number; fatsG: number };
+  meals: {
+    hydrationLiters: number;
+    breakfast: string;
+    preWorkoutSnack: string;
+    postWorkoutMeal: string;
+    lunch: string;
+    eveningSnack: string;
+    dinner: string;
+  };
+};
+
 const headers = {
   "Content-Type": "application/json",
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
 };
+
+const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+const GEMINI_MODEL = "gemini-1.5-flash";
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+
+async function callGemini(profile: Required<ProfileInput>, sport?: Sport): Promise<DayPlan[] | null> {
+  if (!GEMINI_API_KEY) return null;
+
+  const isSportSpecific = sport && sport !== "all";
+  const sportLabel = isSportSpecific ? sport!.replace(/_/g, " ") : "mixed sports";
+  const daysToGenerate = profile.trainingDaysPerWeek;
+
+  const prompt = `You are an expert sports coach and nutritionist for Indian athletes. Generate a ${daysToGenerate}-day weekly training + diet plan for ${sportLabel}.
+
+Athlete profile:
+- Name: ${profile.name}
+- Age: ${profile.age}
+- Height: ${profile.heightCm} cm
+- Weight: ${profile.weightKg} kg
+- Level: ${profile.level}
+- Session length: ${profile.sessionMinutes} min
+- Training days: ${daysToGenerate} days/week
+
+${isSportSpecific
+  ? `Each day covers a different focus for ${sportLabel}: skill, speed, endurance, strength, skill, speed, recovery (in that order, first ${daysToGenerate} days).`
+  : `Each day is a different sport: football, strength, badminton, agility, cricket, table_tennis, strength (in that order, first ${daysToGenerate} days).`}
+
+IMPORTANT: Return ONLY valid JSON array. No markdown, no code fences, no extra text.
+
+Each object must use sport values exactly as: "football", "strength", "badminton", "agility", "cricket", "table_tennis".
+Focus values: "skill", "speed", "endurance", "strength", "recovery".
+
+Schema:
+[
+  {
+    "day": "Monday",
+    "sport": "football",
+    "focus": "skill",
+    "warmup": "string describing warmup 50-100 chars",
+    "mainSet": "string describing main workout 50-100 chars",
+    "cooldown": "string describing cooldown 30-60 chars",
+    "sportDrills": "string describing sport-specific drills 40-80 chars",
+    "strengthBlock": "string describing strength work 40-80 chars",
+    "macros": { "calories": 2500, "proteinG": 150, "carbsG": 300, "fatsG": 70 },
+    "meals": {
+      "hydrationLiters": 3.0,
+      "breakfast": "Indian breakfast (oats, eggs, paratha, etc)",
+      "preWorkoutSnack": "light pre-workout snack",
+      "postWorkoutMeal": "protein + carbs post workout meal",
+      "lunch": "Indian lunch (rice, dal, roti, veg, curd)",
+      "eveningSnack": "light evening snack with fruit/nuts",
+      "dinner": "Indian dinner with protein + vegetables"
+    }
+  }
+]
+
+Use Indian cuisine references. Tailor intensity to ${profile.level} level.
+Make each day unique and interesting. Use realistic macros based on the athlete's weight (${profile.weightKg}kg).
+Day names must be actual weekdays starting from Monday.`;
+
+  try {
+    const body = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 4096
+      }
+    };
+
+    const res = await fetch(GEMINI_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+
+    if (!res.ok) {
+      console.error("Gemini API error:", res.status, await res.text());
+      return null;
+    }
+
+    const data = await res.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) return null;
+
+    // Strip markdown code fences if present
+    const cleanJson = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+    const parsed: GeminiDay[] = JSON.parse(cleanJson);
+    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+
+    const validSports = ["table_tennis", "badminton", "cricket", "football", "agility", "strength"];
+
+    const plan: DayPlan[] = parsed.slice(0, daysToGenerate).map((d) => ({
+      day: d.day,
+      sport: validSports.includes(d.sport) ? (d.sport as Sport) : (isSportSpecific ? sport! : "football"),
+      focus: ["skill", "speed", "endurance", "strength", "recovery"].includes(d.focus) ? (d.focus as Focus) : "skill",
+      sportDrills: [d.sportDrills || "Sport-specific drills as prescribed"],
+      strengthBlock: [d.strengthBlock || "Strength work as prescribed"],
+      warmup: [d.warmup || "General warmup 10 min"],
+      mainSet: [d.mainSet || "Main workout as prescribed"],
+      cooldown: [d.cooldown || "Cool down 5 min"],
+      macros: d.macros || { calories: 2500, proteinG: 150, carbsG: 300, fatsG: 70 },
+      meals: d.meals || {
+        hydrationLiters: 3,
+        breakfast: "Oats with milk and nuts",
+        preWorkoutSnack: "Banana",
+        postWorkoutMeal: "Rice with chicken or paneer",
+        lunch: "Chapati, dal, veg, curd",
+        eveningSnack: "Fruit and nuts",
+        dinner: "Rice/chapati with protein and veggies"
+      }
+    }));
+
+    return plan;
+  } catch (err) {
+    console.error("Gemini call failed:", err);
+    return null;
+  }
+}
 
 const weeklyTemplate: Array<{ day: string; sport: Sport; focus: Focus }> = [
   { day: "Monday", sport: "football", focus: "speed" },
@@ -272,9 +411,15 @@ Deno.serve(async (req) => {
     sessionMinutes: input.sessionMinutes ?? 60
   };
 
-  const plan = (input as any).sport && (input as any).sport !== "all"
-    ? generateSportPlan(profile, (input as any).sport as Sport)
-    : generatePlan(profile);
+  const requestedSport = (input as any).sport as Sport | undefined;
+
+  // Try Gemini first, fall back to deterministic generator
+  let plan = await callGemini(profile, requestedSport);
+  if (!plan) {
+    plan = requestedSport && requestedSport !== "all"
+      ? generateSportPlan(profile, requestedSport)
+      : generatePlan(profile);
+  }
 
   // Link to authenticated user
   const userId = req.auth?.uid;

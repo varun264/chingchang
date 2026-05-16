@@ -213,7 +213,7 @@ export default function HomePage() {
         ) : null}
 
         {error ? <p className="error">{error}</p> : null}
-        {msg ? <p className="successMsg">{msg}</p> : null}
+        {msg ? <p className="successMsg">{msg} <span className="badge badge-green">AI</span></p> : null}
         {!token ? <p className="emptyText">Sign in to see your 7-day weekly plan.</p> : null}
         {token && !plan.length ? (
           <div className="emptyState">
