@@ -65,8 +65,19 @@ const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
 const GEMINI_MODEL = "gemini-1.5-flash";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
-async function callGemini(profile: Required<ProfileInput>, sport?: Sport): Promise<DayPlan[] | null> {
-  if (!GEMINI_API_KEY) return null;
+// Free-tier rate limiting: ~2 RPM for Gemini 1.5 Flash free
+const RATE_WINDOW_MS = 30_000; // 30s cooldown between calls
+let lastGeminiCall = 0;
+
+async function callGemini(profile: Required<ProfileInput>, sport?: Sport): Promise<{ plan: DayPlan[] | null; aiGenerated: boolean }> {
+  if (!GEMINI_API_KEY) return { plan: null, aiGenerated: false };
+
+  // Rate limit: skip if called within cooldown window
+  const now = Date.now();
+  if (now - lastGeminiCall < RATE_WINDOW_MS) {
+    console.warn("Gemini rate cooldown active, skipping AI call");
+    return { plan: null, aiGenerated: false };
+  }
 
   const isSportSpecific = sport && sport !== "all";
   const sportLabel = isSportSpecific ? sport!.replace(/_/g, " ") : "mixed sports";
@@ -129,25 +140,47 @@ Day names must be actual weekdays starting from Monday.`;
       }
     };
 
-    const res = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
+    // AbortController for 8s timeout (Edge Function limit is 10s)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    let res: Response;
+    try {
+      res = await fetch(GEMINI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    // Retry once on 429 / 5xx
+    if ((res.status === 429 || res.status >= 500) && res.status < 600) {
+      console.warn(`Gemini ${res.status}, retrying after 2s...`);
+      await new Promise((r) => setTimeout(r, 2000));
+      const retryRes = await fetch(GEMINI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (retryRes.ok) res = retryRes;
+    }
 
     if (!res.ok) {
       console.error("Gemini API error:", res.status, await res.text());
-      return null;
+      return { plan: null, aiGenerated: false };
     }
 
     const data = await res.json();
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) return null;
+    if (!text) return { plan: null, aiGenerated: false };
 
     // Strip markdown code fences if present
     const cleanJson = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
     const parsed: GeminiDay[] = JSON.parse(cleanJson);
-    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+    if (!Array.isArray(parsed) || parsed.length === 0) return { plan: null, aiGenerated: false };
 
     const validSports = ["table_tennis", "badminton", "cricket", "football", "agility", "strength"];
 
@@ -172,10 +205,11 @@ Day names must be actual weekdays starting from Monday.`;
       }
     }));
 
-    return plan;
+    lastGeminiCall = Date.now();
+    return { plan, aiGenerated: true };
   } catch (err) {
     console.error("Gemini call failed:", err);
-    return null;
+    return { plan: null, aiGenerated: false };
   }
 }
 
@@ -414,7 +448,8 @@ Deno.serve(async (req) => {
   const requestedSport = (input as any).sport as Sport | undefined;
 
   // Try Gemini first, fall back to deterministic generator
-  let plan = await callGemini(profile, requestedSport);
+  const { plan: geminiPlan, aiGenerated } = await callGemini(profile, requestedSport);
+  let plan = geminiPlan;
   if (!plan) {
     plan = requestedSport && requestedSport !== "all"
       ? generateSportPlan(profile, requestedSport)
@@ -486,7 +521,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  return new Response(JSON.stringify({ profileId, profile, plan, saved: true }), {
+  return new Response(JSON.stringify({ profileId, profile, plan, saved: true, aiGenerated }), {
     status: 200,
     headers
   });

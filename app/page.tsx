@@ -90,6 +90,7 @@ export default function HomePage() {
   const [sport, setSport] = useState("all");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [progress, setProgress] = useState<any>(null);
+  const [aiGenerated, setAiGenerated] = useState(false);
 
   const sorted = [...plan].sort((a, b) => ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].indexOf(a.day) - ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].indexOf(b.day));
   const stats = progress?.stats ?? { total: 0, completed: 0, avgRPE: 0, streak: 0 };
@@ -126,6 +127,7 @@ export default function HomePage() {
     try {
       const r = await generatePlanViaEdge({ ...form, sport: s }, token);
       setPlan(r.plan ?? []);
+      setAiGenerated(r.aiGenerated ?? false);
       setMsg(`Week plan for "${getLabel(s)}" created!`);
       setExpanded(r.plan?.[0]?.id ?? null);
       await loadProg(token);
@@ -213,7 +215,7 @@ export default function HomePage() {
         ) : null}
 
         {error ? <p className="error">{error}</p> : null}
-        {msg ? <p className="successMsg">{msg} <span className="badge badge-green">AI</span></p> : null}
+        {msg ? <p className="successMsg">{msg} <span className={`badge ${aiGenerated ? "badge-green" : "badge-gray"}`}>{aiGenerated ? "AI" : "Template"}</span></p> : null}
         {!token ? <p className="emptyText">Sign in to see your 7-day weekly plan.</p> : null}
         {token && !plan.length ? (
           <div className="emptyState">
